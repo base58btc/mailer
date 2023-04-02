@@ -1,0 +1,45 @@
+schema = 3
+
+[mod]
+  [mod."github.com/google/go-cmp"]
+    version = "v0.5.9"
+    hash = "sha256-lQc4O00R3QSMGs9LP8Sy7A9kj0cqV5rrUdpnGeipIyg="
+  [mod."github.com/gorilla/mux"]
+    version = "v1.8.0"
+    hash = "sha256-s905hpzMH9bOLue09E2JmzPXfIS4HhAlgT7g13HCwKE="
+  [mod."github.com/jmoiron/sqlx"]
+    version = "v1.3.5"
+    hash = "sha256-JEg/DpnDOPPUWtFiHQFUwt7+0TWsybPiG1WP6N5oVic="
+  [mod."github.com/joho/godotenv"]
+    version = "v1.5.1"
+    hash = "sha256-kA0osKfsc6Kp+nuGTRJyXZZlJt1D/kuEazKMWYCWcQ8="
+  [mod."github.com/json-iterator/go"]
+    version = "v1.1.10"
+    hash = "sha256-jdS2C0WsgsWREBSj+YUzSqdZofMfUMecaOQ/lB9Mu6k="
+  [mod."github.com/mailgun/mailgun-go/v4"]
+    version = "v4.8.2"
+    hash = "sha256-spQ33du4PCASTvdT9F0M8+jJIc4iZ7swIGkqChxl0Dw="
+  [mod."github.com/mattn/go-sqlite3"]
+    version = "v1.14.16"
+    hash = "sha256-Ky0kas72AY0lpuRiC/fQk9rw9aJ6dvL9y1Ikw5PFzlA="
+  [mod."github.com/modern-go/concurrent"]
+    version = "v0.0.0-20180228061459-e0a39a4cb421"
+    hash = "sha256-+bdeHUArnpkk4eMQIwXm9K249NkpwAjoTrXrGn/4VUE="
+  [mod."github.com/modern-go/reflect2"]
+    version = "v0.0.0-20180701023420-4b7aa43c6742"
+    hash = "sha256-RyIwgrPwtd4lNjLGkBVxRvu5IdXLDqf5F69QWLm0zLw="
+  [mod."github.com/pkg/errors"]
+    version = "v0.8.1"
+    hash = "sha256-oe3iddfoLRwpC3ki5fifHf2ZFprtg99iNak50shiuDw="
+  [mod."github.com/sendgrid/rest"]
+    version = "v2.6.9+incompatible"
+    hash = "sha256-zWb2bF2zB3bEiUaVvGyvewExhvXcZ63hvUa7YUYdKUs="
+  [mod."github.com/sendgrid/sendgrid-go"]
+    version = "v3.12.0+incompatible"
+    hash = "sha256-FNwlAsK0jWDttXyO3kdQSoQiIbVvGQg1Q5s65oinZ4A="
+  [mod."github.com/stretchr/testify"]
+    version = "v1.8.2"
+    hash = "sha256-n32PGyJL6VLtwOGEbS0lFchxunNU9nlol7OSEZlrKUM="
+  [mod."golang.org/x/net"]
+    version = "v0.8.0"
+    hash = "sha256-2cOtqa7aJ5mn64kZ+8+PVjJ4uGbhpXTpC1vm/+iaZzM="
