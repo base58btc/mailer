@@ -24,8 +24,14 @@ type env struct {
 
 func setupEnv() (*env, error) {
 	var e env
+	var err error
 
-	err := godotenv.Load()
+	if secrets := os.Getenv("SECRETS_FILE"); secrets != "" {
+		fmt.Println("using secrets", secrets)
+		err = godotenv.Load(secrets)
+	} else {
+		err = godotenv.Load()
+	}
 	if err != nil {
 		return nil, err
 	}
