@@ -1,0 +1,18 @@
+x package as flake
+- ship on citrine
+
+- add calling package into btcpp-web
+- write up btcpp ticket email!
+- generate pdf w/ qr code for tickets
+- send out btcpp ticket emails!!
+
+
+notes on how to convert a golang project to nix:
+
+	nix flake init -t github:tweag/gomod2nix#app
+	nix develop
+	nix shell nixpkgs#gomod2nix
+	gomod2nix generate
+	# edit app info in default.nix
+	nix build
+	nix run

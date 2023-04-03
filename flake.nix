@@ -1,13 +1,16 @@
 {
-  description = "A basic gomod2nix flake";
+  description = "Flake for the Base58 mailer";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.gomod2nix.url = "github:nix-community/gomod2nix";
 
   outputs = { self, nixpkgs, flake-utils, gomod2nix }:
-    (flake-utils.lib.eachDefaultSystem
-      (system:
+    {
+      nixosModules.default = { config, pkgs, lib, ...}: {
+        imports = [ ./module.nix ];
+      };
+    } // (flake-utils.lib.eachDefaultSystem (system:
         let
           pkgs = import nixpkgs {
             inherit system;
@@ -16,8 +19,9 @@
 
         in
         {
-          packages.default = pkgs.callPackage ./. { };
+          packages.mailer = pkgs.callPackage ./. { };
           devShells.default = import ./shell.nix { inherit pkgs; };
         })
+
     );
 }
