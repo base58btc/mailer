@@ -35,6 +35,12 @@ type (
 		SendAt float64 `json:"send_at"`
 	}
 
+	ReturnVal struct {
+		Success bool   `json:"success"`
+		Code int       `json:"code"`
+		Message string `json:"error,omitempty"`
+	}
+
 	JobDelete struct {
 		JobKey string `json:"job_key"`
 	}

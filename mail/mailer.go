@@ -59,6 +59,8 @@ func useMailGun(mr *Mailer, m *Mail) (string, error) {
 		m.ToAddr,
 	)
 
+	msg.SetHtml(m.HTMLBody)
+
 	for _, a := range m.Attachments {
 		msg.AddBufferAttachment(a.Name, a.Content)
 	}

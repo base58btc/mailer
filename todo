@@ -1,18 +1,25 @@
-x package as flake
-- ship on citrine
 
-- add calling package into btcpp-web
-- write up btcpp ticket email!
+
 - generate pdf w/ qr code for tickets
+- add calling package into btcpp-web
+- send a test email!
+- generate missing ticket refs
+
+
+- hooks for any *new* tickets
+	- opennode
+	- stripe
+- pull in new emails?
+	aside: as long as i use a deterministic jobkey,
+	       i don't have to worry about sending emails to people twice!!
+
+
 - send out btcpp ticket emails!!
+- schedule sponsor tweets
+- make speaker images
+- schedule speaker announces
+- reserve lunches
+- catering for speaker dinner
+- furniture for speaker dinner
 
-
-notes on how to convert a golang project to nix:
-
-	nix flake init -t github:tweag/gomod2nix#app
-	nix develop
-	nix shell nixpkgs#gomod2nix
-	gomod2nix generate
-	# edit app info in default.nix
-	nix build
-	nix run
+- finish shipping base58 website refresh

@@ -19,6 +19,7 @@
 
         in
         {
+          packages.default = pkgs.callPackage ./. { };
           packages.mailer = pkgs.callPackage ./. { };
           devShells.default = import ./shell.nix { inherit pkgs; };
         })

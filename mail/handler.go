@@ -11,12 +11,6 @@ import (
 	"time"
 )
 
-type ReturnVal struct {
-	Success bool   `json:"success"`
-	Code int       `json:"code"`
-	Message string `json:"error,omitempty"`
-}
-
 func returnErr(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&ReturnVal{
