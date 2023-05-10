@@ -45,9 +45,9 @@ with lib;
         default = "mailer.sqlite";
       };
 
-      mailGunDomain = mkOption {
+      mailerDomains = mkOption {
         type = types.str;
-        description = mdDoc "Domain name to send mailgun requests to";
+        description = mdDoc "Domain options for to sending mail requests from";
       };
     };
 
@@ -56,7 +56,7 @@ with lib;
         description = "Base58 mailer service";
         after = [ "network.target" ];
         wantedBy = [ "multi-user.target" ];
-	script = "PORT=${toString cfg.port} SECRETS_FILE=${toString cfg.secretsFile} MAIL_SEND_TIMER=${toString cfg.mailSendFrequency} DB_NAME=${toString cfg.dbFile} MAILGUN_DOMAIN=${toString cfg.mailGunDomain} ${cfg.mailerBin}";
+	script = "PORT=${toString cfg.port} SECRETS_FILE=${toString cfg.secretsFile} MAIL_SEND_TIMER=${toString cfg.mailSendFrequency} DB_NAME=${toString cfg.dbFile} MAIL_DOMAINS=${toString cfg.mailerDomains} ${cfg.mailerBin}";
 
         serviceConfig = {
           Type = "simple";

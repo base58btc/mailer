@@ -17,7 +17,7 @@ import (
 
 var defaultFromName = "Base58⛓🔓"
 var defaultToName = "🐲"
-var defaultFrom = "hello@base58.info"
+var defaultFrom = "hello@base58.school"
 
 type Mailer struct {
 	SendGridKey string

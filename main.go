@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/base58btc/mailer/mail"
@@ -18,7 +19,7 @@ type env struct {
 	IsProd bool
 	Port string
 	MailGunKey string
-	MailGunDomain string
+	MailDomains string
 	Secret string
 }
 
@@ -42,7 +43,7 @@ func setupEnv() (*env, error) {
 		return nil, err
 	}
 	e.MailGunKey = os.Getenv("MAILGUN_KEY")
-	e.MailGunDomain = os.Getenv("MAILGUN_DOMAIN")
+	e.MailDomains = os.Getenv("MAIL_DOMAINS")
 	e.SendTimer = int(val)
 	e.DbName = os.Getenv("DB_NAME")
 	e.IsProd = os.Getenv("PROD") == "1"
@@ -52,7 +53,15 @@ func setupEnv() (*env, error) {
 }
 
 /* For now, we do it simply with a single worker bot */
-func mailWorker(e *env, ds *mail.Datastore, ms *mail.Mailer) {
+func mailWorker(e *env, ds *mail.Datastore, mailers map[string]*mail.Mailer) {
+
+	defaultDomain := e.DefaultDomain()
+	dd, ok := mailers[defaultDomain]
+	if !ok {
+		fmt.Printf("Unable to get default domain %s", defaultDomain)
+		os.Exit(1)
+	}
+
 	for {
 		mails, err := ds.GetToSendBatch(time.Now(), 1000)
 		if err != nil {
@@ -63,6 +72,12 @@ func mailWorker(e *env, ds *mail.Datastore, ms *mail.Mailer) {
 		fmt.Printf("Processing batch of %d mails\n", len(mails))
 		/* Send off mails to be sent! */
 		for _, m := range mails {
+			ms, ok := mailers[m.Domain]
+			if !ok {
+				fmt.Printf("unable to find mailer for domain %s, using default %s", m.Domain, defaultDomain)
+				ms = dd
+			}
+
 			id, err := ms.SendMail(m)
 			if err != nil {
 				fmt.Printf("Mail job %s failed (x%d)! %s\n", m.IdemKey(), m.TryCount + 1, err.Error())
@@ -80,6 +95,36 @@ func mailWorker(e *env, ds *mail.Datastore, ms *mail.Mailer) {
 	}
 }
 
+func trimstrings(in []string) []string {
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = strings.TrimSpace(s)
+	}
+	return out
+}
+
+func (e *env) DefaultDomain() string {
+	domains := trimstrings(strings.Split(e.MailDomains, ","))
+	return domains[0]
+}
+
+func buildMailers(env *env) map[string]*mail.Mailer {
+
+	domains := trimstrings(strings.Split(env.MailDomains, ","))
+	mailers := make(map[string]*mail.Mailer)
+
+	for _, mailDomain := range domains {
+		mailers[mailDomain] = mail.NewMailer(
+			env.SendGrid,
+			!env.IsProd,
+			env.MailGunKey,
+			mailDomain,
+		)
+	}
+
+	return mailers
+}
+
 func main() {
 	env, err := setupEnv()
 
@@ -93,16 +138,12 @@ func main() {
 		fmt.Printf("Unable to setup db %s\n", err)
 		os.Exit(1)
 	}
-	ms := mail.NewMailer(
-		env.SendGrid,
-		!env.IsProd,
-		env.MailGunKey,
-		env.MailGunDomain,
-	)
-	fmt.Println("The Mailer Domain is:", ms.MailGunDomain)
+
+	fmt.Println("The Mailer Domain options are:", env.MailDomains)
 
 	/* Start up the mail worker */
-	go mailWorker(env, ds, ms)
+	mailers := buildMailers(env)
+	go mailWorker(env, ds, mailers)
 
 	/* Listen for incoming mail requests */
 	srv := &http.Server{

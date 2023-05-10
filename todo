@@ -1,25 +1,9 @@
-
-
-- generate pdf w/ qr code for tickets
-- add calling package into btcpp-web
-- send a test email!
-- generate missing ticket refs
-
-
-- hooks for any *new* tickets
-	- opennode
-	- stripe
-- pull in new emails?
-	aside: as long as i use a deterministic jobkey,
-	       i don't have to worry about sending emails to people twice!!
-
-
-- send out btcpp ticket emails!!
-- schedule sponsor tweets
-- make speaker images
-- schedule speaker announces
-- reserve lunches
-- catering for speaker dinner
-- furniture for speaker dinner
-
-- finish shipping base58 website refresh
+notes on email templating:
+- GMail has character limits
+- use inline styles as much as possible
+- Yahoo no use background images (use just a color declaration just the color)
+- thunderbird doesn't load external images (have color in same declaration)
+- could be a different color, need back-up color
+- images won't load in a lot of clients (use alt text!)
+- don't support flex and grid layouts
+- inline imgs w/ uri encoded??

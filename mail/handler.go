@@ -58,7 +58,7 @@ func checkKey(secret string, r *http.Request) error {
 
 	if authToken != expToken {
 		fmt.Println("inputs:", timestamp, r.URL.Path, r.Method)
-		fmt.Println("expected %s, got %s", expToken, authToken)
+		fmt.Printf("expected %s, got %s", expToken, authToken)
 		return fmt.Errorf("Invalid auth token")
 	}
 	return nil

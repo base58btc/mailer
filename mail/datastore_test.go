@@ -8,7 +8,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-
 func getDatastore(t *tt.T) *Datastore {
 	ds, err := DatastoreNew(":memory:")
 	if err != nil {
@@ -87,6 +86,7 @@ func TestDataSaveMail(t *tt.T) {
 				Name: "greetings.txt",
 			},
 		}),
+		Domain: "hihi.go",
 	}
 	err := ds.ScheduleMail(mail)
 	if err != nil {

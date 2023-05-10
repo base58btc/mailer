@@ -33,6 +33,7 @@ type (
 		TextBody string `json:"text_body"`
 		Attachments AttachSet `json:"attachments,omitempty"`
 		SendAt float64 `json:"send_at"`
+		Domain string  `json:"mail_domain"`
 	}
 
 	ReturnVal struct {
@@ -59,6 +60,7 @@ type (
 		SendAt Timestamp `db:"send_at"`
 		State ScheduleState
 		TryCount int `db:"try_count"`
+		Domain string `db:"mail_domain"`
 	}
 
 	Attachment struct {
@@ -93,6 +95,7 @@ func ConvertMailRequest(job MailRequest) (*Mail, error) {
 		TextBody: job.TextBody,
 		Attachments: job.Attachments,
 		SendAt: Timestamp(time.Unix(int64(job.SendAt), 0)),
+		Domain: job.Domain,
 	}
 
 	if m.HTMLBody == "" && m.TextBody == "" {

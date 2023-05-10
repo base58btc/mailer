@@ -2,6 +2,7 @@
 
 # Prod objs
 .env
+.direnv
 mailer.sqlite
 mailer
 
