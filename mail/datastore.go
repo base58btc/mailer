@@ -34,6 +34,7 @@ var db_migration_exec = []string{
 			try_count INT NOT NULL DEFAULT 0
 	        );`,
 	`ALTER TABLE scheduled ADD COLUMN mail_domain TEXT;`,
+	`ALTER TABLE scheduled ADD COLUMN sub TEXT;`,
 }
 
 func (ds *Datastore) CurrMigrations() int {
@@ -198,6 +199,13 @@ func (ds *Datastore) DeleteJob(jobKey string) {
 	ds.Data.MustExec(stmt, jobKey)
 }
 
+func (ds *Datastore) DeleteSubscription(subKey string) {
+	stmt := `DELETE FROM scheduled
+			WHERE sub = ?
+			AND (state = 'unsent' OR state = 'failed')`
+	ds.Data.MustExec(stmt, subKey)
+}
+
 func (ds *Datastore) RescheduleFailed(idemKey string, tryCount int, sendAt int64) {
 	stmt := `UPDATE scheduled 
 		SET 
@@ -228,6 +236,7 @@ func (ds *Datastore) ScheduleMail(m *Mail) error {
 	stmt := `INSERT INTO scheduled (
 			idem_key,
 			job_key,
+			sub,
 			to_addr,
 			to_name,
 			from_addr,
@@ -239,14 +248,13 @@ func (ds *Datastore) ScheduleMail(m *Mail) error {
 			attachments,
 			send_at,
 			mail_domain
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain)
+	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.Sub, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain)
 
 	return err
 }
 
-/* When we restart, we everything that was 'inprog' to 'failed' */
 func (ds *Datastore) CancelJob(jobKey string) {
 	stmt := `DELETE FROM scheduled WHERE job_key = ? AND state != 'sent'`
 	ds.Data.MustExec(stmt, jobKey)

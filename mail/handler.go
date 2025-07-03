@@ -100,7 +100,7 @@ func HandleMailJob(w http.ResponseWriter, r *http.Request, ds *Datastore, secret
 	}
 
 	/* Send a success */
-	fmt.Printf("Scheduled new mail item for job %s (%s)\n", m.JobKey, m.IdemKey())
+	fmt.Printf("Scheduled new mail item for job %s %s\n", m.JobKey, m.IdemKey())
 	returnSuccess(w)
 }
 
@@ -122,10 +122,33 @@ func DeleteMailJob(w http.ResponseWriter, r *http.Request, ds *Datastore, secret
 		return
 	}
 	ds.DeleteJob(job.JobKey)
+	fmt.Printf("Deleted job %s\n", job.JobKey)
 	/* FIXME: notify if none? */
 	returnSuccess(w)
 }
 
+func DeleteSubJob(w http.ResponseWriter, r *http.Request, ds *Datastore, secret string) {
+	err := checkKey(secret, r)
+	if err != nil {
+		fmt.Printf("Not auth'd")
+		returnErr(w, err)
+		return
+	}
+
+	var sub SubDelete
+	decoder := json.NewDecoder(r.Body)
+	err = decoder.Decode(&sub)
+
+	if err != nil {
+		fmt.Printf("Unable to decode request: %s\n", err)
+		returnErr(w, err)
+		return
+	}
+	ds.DeleteSubscription(sub.SubKey)
+	fmt.Printf("Deleted subscription %s\n", sub.SubKey)
+	/* FIXME: notify if none? */
+	returnSuccess(w)
+}
 
 func SetupRoutes(ds *Datastore, secret string) http.Handler {
 	r := mux.NewRouter()
@@ -136,6 +159,10 @@ func SetupRoutes(ds *Datastore, secret string) http.Handler {
 
 	r.HandleFunc("/job", func (w http.ResponseWriter, r *http.Request) {
 		DeleteMailJob(w, r, ds, secret)
+	}).Methods("DELETE")
+
+	r.HandleFunc("/sub", func (w http.ResponseWriter, r *http.Request) {
+		DeleteSubJob(w, r, ds, secret)
 	}).Methods("DELETE")
 
 	return r
