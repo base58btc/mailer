@@ -127,6 +127,29 @@ func DeleteMailJob(w http.ResponseWriter, r *http.Request, ds *Datastore, secret
 	returnSuccess(w)
 }
 
+func DeleteMissive(w http.ResponseWriter, r *http.Request, ds *Datastore, secret string) {
+	err := checkKey(secret, r)
+	if err != nil {
+		fmt.Printf("Not auth'd")
+		returnErr(w, err)
+		return
+	}
+
+	var missive MissiveDelete
+	decoder := json.NewDecoder(r.Body)
+	err = decoder.Decode(&missive)
+
+	if err != nil {
+		fmt.Printf("Unable to decode request: %s\n", err)
+		returnErr(w, err)
+		return
+	}
+	ds.CancelMissive(missive.Missive)
+	fmt.Printf("Deleted missive %s\n", missive.Missive)
+	/* FIXME: notify if none? */
+	returnSuccess(w)
+}
+
 func DeleteSubJob(w http.ResponseWriter, r *http.Request, ds *Datastore, secret string) {
 	err := checkKey(secret, r)
 	if err != nil {
@@ -163,6 +186,10 @@ func SetupRoutes(ds *Datastore, secret string) http.Handler {
 
 	r.HandleFunc("/sub", func (w http.ResponseWriter, r *http.Request) {
 		DeleteSubJob(w, r, ds, secret)
+	}).Methods("DELETE")
+
+	r.HandleFunc("/missive", func (w http.ResponseWriter, r *http.Request) {
+		DeleteMissive(w, r, ds, secret)
 	}).Methods("DELETE")
 
 	return r

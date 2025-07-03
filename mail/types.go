@@ -24,6 +24,7 @@ type (
 	MailRequest struct {
 		JobKey string `json:"job_key"`
 		Subscription string `json:"subscription,omitempty"`
+		Missive     string   `json:"missive,omitempty"`
 		ToAddr string `json:"to_addr"`
 		ToName string `json:"to_name,omitempty"`
 		FromAddr string `json:"from_addr,omitempty"`
@@ -51,9 +52,14 @@ type (
 		SubKey string `json:"subscription"`
 	}
 
+	MissiveDelete struct {
+		Missive string `json:"missive"`
+	}
+
 	Mail struct {
 		JobKey string `db:"job_key"`
 		Sub    sql.NullString `db:"sub"`
+		Missive sql.NullString `db:"missive"`
 		ToAddr string `db:"to_addr"`
 		ToName sql.NullString `db:"to_name"`
 		FromAddr sql.NullString `db:"from_addr"`
@@ -82,6 +88,10 @@ func ConvertMailRequest(job MailRequest) (*Mail, error) {
 		Sub:    sql.NullString{
 			Valid: job.Subscription != "",
 			String: job.Subscription,
+		},
+		Missive:    sql.NullString{
+			Valid: job.Missive!= "",
+			String: job.Missive,
 		},
 		ToAddr: job.ToAddr,
 		ToName: sql.NullString{
