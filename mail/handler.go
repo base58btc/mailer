@@ -175,6 +175,7 @@ func DeleteSubJob(w http.ResponseWriter, r *http.Request, ds *Datastore, secret 
 
 func SetupRoutes(ds *Datastore, secret string) http.Handler {
 	r := mux.NewRouter()
+ r.HandleFunc("/capabilities",func(w http.ResponseWriter,r *http.Request){HandleCapabilities(w,r,secret)}).Methods("GET")
  r.HandleFunc("/suppression",func(w http.ResponseWriter,r *http.Request){HandleSuppression(w,r,ds,secret)}).Methods("PUT")
 
 	r.HandleFunc("/job", func (w http.ResponseWriter, r *http.Request) {

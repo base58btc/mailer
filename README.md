@@ -32,6 +32,14 @@ callers must also use the suppression API below to cancel queued work.
 
 ### Durable suppression
 
+Before enabling an Alerts client, authenticate `GET /capabilities` using the same
+timestamp scheme (sign the GET method and `/capabilities` path). The response
+advertises `queue_contract: 1` and the features `idempotent_jobs`,
+`unsubscribe_headers`, and `durable_suppression`, alongside `success` and `code`.
+Clients must require these features rather than assuming an older deployment
+honors new JSON fields. The check is read-only and does not test database health,
+provider credentials, or actual delivery. Deploy and verify those separately.
+
 Authenticated `PUT /suppression` accepts `{"scope":"job","key":"job-key"}` or
 `{"scope":"subscription","key":"subscription-generation"}`. It atomically
 stores a permanent suppression marker and marks matching unsent work cancelled.
