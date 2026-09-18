@@ -114,3 +114,31 @@ Deploy a separate Prometheus scrape with the read-only bearer credential and rou
 exhausted-retry and overdue-attempt alerts independently of this email pipeline.
 The Alerts repository supplies tested rules in `deploy/alerts-rules.yml`. Verify
 real scraping, routing and provider bounce handling before launch.
+
+### Mailgun bounce and complaint feedback
+
+Set `MAILGUN_WEBHOOK_SIGNING_KEY` (the Mailgun webhook signing key, not the API key
+or queue secret) and configure permanent-failure and complaint webhooks to POST
+to `https://<mailer-host>/webhooks/mailgun`. Without this key the route is disabled.
+The configured `MAIL_DOMAINS` list restricts accepted sending domains. HTTPS is
+required at the reverse proxy because Mailgun signs timestamp/token, not the full
+JSON event body. Signature verification follows
+https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/securing-webhooks.
+
+New Mailgun messages include a `mailer_queue_id` variable. Feedback must match
+that stored queue identity, recipient and configured sending domain. Explicit
+permanent hard bounces and complaints persist a recipient/domain block, cancel
+queued messages in that domain and prevent future sends. The send boundary checks
+the actual provider domain, including configured fallback routing. Messages already
+submitted to the provider cannot be recalled. Other domains remain unaffected;
+within the blocked domain this also protects transactional senders from repeatedly
+mailing an undeliverable or complaining recipient. It does not change application
+newsletter/release consent or billing access.
+
+Invalid signatures/associations return 406; successful commits and duplicates return
+200; storage failures return 503 so Mailgun can retry. Hashed replay tokens are
+pruned in bounded batches after two days during feedback processing; full webhook
+payloads are never retained. Recipient blocks persist until an operator-reviewed
+recovery procedure is implemented. Pre-integration emails without the queue variable
+cannot be matched. Real provider verification, operator recovery, and surfacing the
+blocked destination to Alerts remain launch work.

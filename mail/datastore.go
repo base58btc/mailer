@@ -38,6 +38,8 @@ var db_migration_exec = []string{
 	`ALTER TABLE scheduled ADD COLUMN missive TEXT;`,
  `ALTER TABLE scheduled ADD COLUMN unsubscribe_url TEXT NOT NULL DEFAULT '';`,
  `CREATE TABLE mail_suppressions(scope TEXT NOT NULL CHECK(scope IN ('job','subscription')), suppression_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(scope,suppression_key));`,
+ `CREATE TABLE mailgun_feedback_tokens(token_hash TEXT PRIMARY KEY,event_id TEXT NOT NULL,domain TEXT NOT NULL,created_at INTEGER NOT NULL);`,
+ `CREATE TABLE mail_recipient_suppressions(domain TEXT NOT NULL,recipient TEXT NOT NULL,reason TEXT NOT NULL CHECK(reason IN ('hard_bounce','complaint')),created_at INTEGER NOT NULL,PRIMARY KEY(domain,recipient));`,
 }
 
 func (ds *Datastore) CurrMigrations() int {
@@ -270,9 +272,10 @@ func (ds *Datastore) ScheduleMail(m *Mail) error {
  unsubscribe_url
 		) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
  WHERE NOT EXISTS(SELECT 1 FROM mail_suppressions WHERE (scope='job' AND suppression_key=?) OR (scope='subscription' AND suppression_key=?))
+ AND NOT EXISTS(SELECT 1 FROM mail_recipient_suppressions WHERE domain=lower(?) AND recipient=lower(?))
  ON CONFLICT(idem_key) DO NOTHING`
 
-	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.Sub, m.Missive, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain, m.UnsubscribeURL, m.JobKey, m.Sub.String)
+	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.Sub, m.Missive, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain, m.UnsubscribeURL, m.JobKey, m.Sub.String, m.Domain, m.ToAddr)
 
 	return err
 }

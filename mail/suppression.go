@@ -37,13 +37,31 @@ func (ds *Datastore) Suppress(s Suppression) error {
 // BeginDelivery rechecks cancellation after batch selection and establishes the
 // send boundary. A provider call already in flight cannot be recalled.
 func (ds *Datastore) BeginDelivery(idemKey string) (bool, error) {
-	result, err := ds.Data.Exec(`UPDATE scheduled SET state='sending' WHERE idem_key=? AND state='inprog'
+	return ds.BeginDeliveryForDomain(idemKey, "")
+}
+
+// Runtime passes the actual provider domain, including any configured fallback.
+func (ds *Datastore) BeginDeliveryForDomain(idemKey, domain string) (bool, error) {
+	tx, err := ds.Data.Beginx()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(`UPDATE scheduled SET state='cancelled' WHERE idem_key=? AND state='inprog'
+ AND EXISTS(SELECT 1 FROM mail_recipient_suppressions s WHERE s.recipient=lower(scheduled.to_addr)
+ AND s.domain=lower(CASE WHEN ?='' THEN coalesce(scheduled.mail_domain,'') ELSE ? END))`, idemKey, domain, domain); err != nil {
+		return false, err
+	}
+	result, err := tx.Exec(`UPDATE scheduled SET state='sending' WHERE idem_key=? AND state='inprog'
  AND NOT EXISTS(SELECT 1 FROM mail_suppressions WHERE (scope='job' AND suppression_key=scheduled.job_key) OR (scope='subscription' AND suppression_key=scheduled.sub))`, idemKey)
 	if err != nil {
 		return false, err
 	}
 	n, err := result.RowsAffected()
-	return n == 1, err
+	if err != nil {
+		return false, err
+	}
+	return n == 1, tx.Commit()
 }
 
 func HandleSuppression(w http.ResponseWriter, r *http.Request, ds *Datastore, secret string) {

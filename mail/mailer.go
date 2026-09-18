@@ -73,7 +73,8 @@ func buildMailgunMessage(mg *mailgun.MailgunImpl, m *Mail) (*mailgun.Message, er
 		m.ToAddr,
 	)
 
-	msg.SetHtml(m.HTMLBody)
+	if err := msg.AddVariable("mailer_queue_id", m.IdemKey()); err != nil { return nil, err }
+ msg.SetHtml(m.HTMLBody)
 	addUnsubscribeHeaders(m.UnsubscribeURL, msg.AddHeader)
 
 	for _, a := range m.Attachments {

@@ -78,7 +78,7 @@ func mailWorker(e *env, ds *mail.Datastore, mailers map[string]*mail.Mailer) {
 				ms = dd
 			}
 
-			allowed, err := ds.BeginDelivery(m.IdemKey())
+			allowed, err := ds.BeginDeliveryForDomain(m.IdemKey(), ms.MailGunDomain)
 			if err != nil {
 				fmt.Printf("Unable to check queued mail: %s\n", err)
 				os.Exit(1)
@@ -156,7 +156,7 @@ func main() {
 	/* Listen for incoming mail requests */
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("%s:%s", "", env.Port),
-		Handler: mail.SetupRoutesWithMetrics(ds, env.Secret, os.Getenv("METRICS_TOKEN")),
+		Handler: mail.SetupRoutesWithMailgun(ds, env.Secret, os.Getenv("METRICS_TOKEN"), os.Getenv("MAILGUN_WEBHOOK_SIGNING_KEY"), trimstrings(strings.Split(env.MailDomains, ","))),
 	}
 
 	fmt.Printf("Starting application on port %s\n", env.Port)
