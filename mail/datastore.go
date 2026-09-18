@@ -37,6 +37,7 @@ var db_migration_exec = []string{
 	`ALTER TABLE scheduled ADD COLUMN sub TEXT;`,
 	`ALTER TABLE scheduled ADD COLUMN missive TEXT;`,
  `ALTER TABLE scheduled ADD COLUMN unsubscribe_url TEXT NOT NULL DEFAULT '';`,
+ `CREATE TABLE mail_suppressions(scope TEXT NOT NULL CHECK(scope IN ('job','subscription')), suppression_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(scope,suppression_key));`,
 }
 
 func (ds *Datastore) CurrMigrations() int {
@@ -174,7 +175,7 @@ func (ds *Datastore) GetToSendBatch(when time.Time, batchSize int) ([]*Mail, err
 	for i, m := range mail {
 		keys[i] = m.IdemKey()
 	}
-	update := `UPDATE scheduled SET state = 'inprog' WHERE idem_key IN (?);`
+	update := `UPDATE scheduled SET state = 'inprog' WHERE state IN ('unsent','failed') AND idem_key IN (?);`
 	exec, args, err := sqlx.In(update, keys)
 	if err != nil {
 		return nil, err
@@ -227,7 +228,7 @@ func (ds *Datastore) RescheduleFailed(idemKey string, tryCount int, sendAt int64
 			state = 'failed', 
 			try_count = ?,
 			send_at = ?
-		WHERE idem_key = ?`
+		WHERE idem_key = ? AND state IN ('inprog','sending')`
 	ds.Data.MustExec(stmt, tryCount, sendAt, idemKey)
 }
 
@@ -235,7 +236,7 @@ func (ds *Datastore) MarkSent(idemKey string) {
 	stmt := `UPDATE scheduled 
 		SET 
 			state = 'sent'
-		WHERE idem_key = ?`
+		WHERE idem_key = ? AND state IN ('inprog','sending')`
 	ds.Data.MustExec(stmt, idemKey)
 }
 
@@ -267,16 +268,17 @@ func (ds *Datastore) ScheduleMail(m *Mail) error {
 			send_at,
 			mail_domain,
  unsubscribe_url
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+ WHERE NOT EXISTS(SELECT 1 FROM mail_suppressions WHERE (scope='job' AND suppression_key=?) OR (scope='subscription' AND suppression_key=?))
  ON CONFLICT(idem_key) DO NOTHING`
 
-	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.Sub, m.Missive, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain, m.UnsubscribeURL)
+	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.Sub, m.Missive, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain, m.UnsubscribeURL, m.JobKey, m.Sub.String)
 
 	return err
 }
 
 func (ds *Datastore) ResetInProgress() {
-	stmt := `UPDATE scheduled SET state = 'failed' WHERE state = 'inprog';`
+	stmt := `UPDATE scheduled SET state = 'failed' WHERE state IN ('inprog','sending');`
 	ds.Data.MustExec(stmt)
 }
 

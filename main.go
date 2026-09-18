@@ -78,6 +78,14 @@ func mailWorker(e *env, ds *mail.Datastore, mailers map[string]*mail.Mailer) {
 				ms = dd
 			}
 
+			allowed, err := ds.BeginDelivery(m.IdemKey())
+			if err != nil {
+				fmt.Printf("Unable to check queued mail: %s\n", err)
+				os.Exit(1)
+			}
+			if !allowed {
+				continue
+			}
 			id, err := ms.SendMail(m)
 			if err != nil {
 				fmt.Printf("Mail job %s failed (x%d)! %s\n", m.IdemKey(), m.TryCount + 1, err.Error())

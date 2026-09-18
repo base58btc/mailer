@@ -28,7 +28,27 @@ to Mailgun and SendGrid messages. URLs with credentials, fragments, or header
 delimiters are rejected. The caller must implement the unsubscribe POST; the
 mailer never fetches this URL. Omit this field for transactional payment receipts.
 Older queue records default to no unsubscribe URL. This adds headers only:
-durable suppression and cancellation of queued work still require integration.
+callers must also use the suppression API below to cancel queued work.
+
+### Durable suppression
+
+Authenticated `PUT /suppression` accepts `{"scope":"job","key":"job-key"}` or
+`{"scope":"subscription","key":"subscription-generation"}`. It atomically
+stores a permanent suppression marker and marks matching unsent work cancelled.
+Repeated requests succeed. A later submission matching the marker succeeds as a
+no-op; it cannot recreate the cancelled job, even after restart. Sent records
+remain sent. Suppression markers have no automatic expiry.
+
+Use opaque keys. A new opt-in must use a new subscription-generation key; the
+old generation remains suppressed so delayed requests cannot reactivate it.
+Subscription suppression does not affect transactional mail that omits that key.
+The worker checks cancellation again after batch selection, immediately before
+starting the provider request. An already-started provider request cannot be
+recalled, but late results cannot restore retries for a cancelled job.
+
+The legacy DELETE endpoints still remove existing records; they do not provide
+this durable protection against future submissions. Alerts must integrate the
+suppression API before enabling queued delivery for subscriber notifications.
 
 ```
 curl https://localhost:8889/job -X PUT \
