@@ -36,6 +36,7 @@ var db_migration_exec = []string{
 	`ALTER TABLE scheduled ADD COLUMN mail_domain TEXT;`,
 	`ALTER TABLE scheduled ADD COLUMN sub TEXT;`,
 	`ALTER TABLE scheduled ADD COLUMN missive TEXT;`,
+ `ALTER TABLE scheduled ADD COLUMN unsubscribe_url TEXT NOT NULL DEFAULT '';`,
 }
 
 func (ds *Datastore) CurrMigrations() int {
@@ -141,7 +142,7 @@ func (ds *Datastore) SetState(idemKey string, state ScheduleState) error {
 }
 
 func (ds *Datastore) ListJobs(state *ScheduleState) ([]*Mail, error) {
-	stmt := `SELECT job_key, sub, missive, to_addr, to_name, from_addr, from_name, reply_to, title, html_body, text_body, attachments, send_at, state, try_count, mail_domain from scheduled WHERE state = ?`
+	stmt := `SELECT job_key, sub, missive, to_addr, to_name, from_addr, from_name, reply_to, title, html_body, text_body, attachments, send_at, state, try_count, mail_domain, unsubscribe_url from scheduled WHERE state = ?`
 
 	var mail []*Mail
 	err := ds.Data.Select(&mail, stmt, state)
@@ -149,7 +150,7 @@ func (ds *Datastore) ListJobs(state *ScheduleState) ([]*Mail, error) {
 }
 
 func (ds *Datastore) GetToSendBatch(when time.Time, batchSize int) ([]*Mail, error) {
-	stmt := `SELECT job_key, sub, missive, to_addr, to_name, from_addr, from_name, reply_to, title, html_body, text_body, attachments, send_at, state, try_count, mail_domain
+	stmt := `SELECT job_key, sub, missive, to_addr, to_name, from_addr, from_name, reply_to, title, html_body, text_body, attachments, send_at, state, try_count, mail_domain, unsubscribe_url
 		FROM scheduled 
 		WHERE 
 			   ((state = 'failed' AND try_count < 20) 
@@ -186,7 +187,7 @@ func (ds *Datastore) GetToSendBatch(when time.Time, batchSize int) ([]*Mail, err
 }
 
 func (ds *Datastore) GetJob(jobKey string) ([]*Mail, error) {
-	stmt := `SELECT job_key, sub, missive, to_addr, to_name, from_addr, from_name, reply_to, title, html_body, text_body, attachments, send_at, state, try_count, mail_domain FROM scheduled WHERE job_key = ?`
+	stmt := `SELECT job_key, sub, missive, to_addr, to_name, from_addr, from_name, reply_to, title, html_body, text_body, attachments, send_at, state, try_count, mail_domain, unsubscribe_url FROM scheduled WHERE job_key = ?`
 
 	var mail []*Mail
 	err := ds.Data.Select(&mail, stmt, jobKey)
@@ -239,7 +240,7 @@ func (ds *Datastore) MarkSent(idemKey string) {
 }
 
 func (ds *Datastore) GetMail(idemKey string) (*Mail, error) {
-	stmt := `SELECT job_key, to_addr, to_name, from_addr, from_name, reply_to, title, html_body, text_body, attachments, send_at, state, try_count, mail_domain from scheduled WHERE idem_key = ?`
+	stmt := `SELECT job_key, to_addr, to_name, from_addr, from_name, reply_to, title, html_body, text_body, attachments, send_at, state, try_count, mail_domain, unsubscribe_url from scheduled WHERE idem_key = ?`
 
 	var mail Mail
 	err := ds.Data.Get(&mail, stmt, idemKey)
@@ -264,11 +265,12 @@ func (ds *Datastore) ScheduleMail(m *Mail) error {
 			text_body,
 			attachments,
 			send_at,
-			mail_domain
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			mail_domain,
+ unsubscribe_url
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
  ON CONFLICT(idem_key) DO NOTHING`
 
-	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.Sub, m.Missive, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain)
+	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.Sub, m.Missive, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain, m.UnsubscribeURL)
 
 	return err
 }

@@ -21,6 +21,15 @@ different job; changing only the body does not update an existing job. Acceptanc
 means the queue owns the job, not that the recipient received it. This protection
 lasts while the queue record exists; deleting it removes the duplicate marker.
 
+For release/newsletter mail, an optional `unsubscribe_url` supplies the caller's
+HTTPS one-click unsubscribe endpoint. The mailer stores it with the job and adds
+`List-Unsubscribe: <URL>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+to Mailgun and SendGrid messages. URLs with credentials, fragments, or header
+delimiters are rejected. The caller must implement the unsubscribe POST; the
+mailer never fetches this URL. Omit this field for transactional payment receipts.
+Older queue records default to no unsubscribe URL. This adds headers only:
+durable suppression and cancellation of queued work still require integration.
+
 ```
 curl https://localhost:8889/job -X PUT \
 	--data '{"job_key": "keyless", \

@@ -20,17 +20,17 @@ var defaultToName = "🐲"
 var defaultFrom = "hello@base58.school"
 
 type Mailer struct {
-	SendGridKey string
-	UseSandbox bool
+	SendGridKey   string
+	UseSandbox    bool
 	MailGunDomain string
-	MailGunKey string
+	MailGunKey    string
 }
 
 func NewMailer(sgKey string, useSandbox bool, mgKey string, domain string) *Mailer {
 	return &Mailer{
-		SendGridKey: sgKey,
-		UseSandbox: useSandbox,
-		MailGunKey: mgKey,
+		SendGridKey:   sgKey,
+		UseSandbox:    useSandbox,
+		MailGunKey:    mgKey,
 		MailGunDomain: domain,
 	}
 }
@@ -41,6 +41,20 @@ func (mr *Mailer) SendMail(m *Mail) (string, error) {
 
 func useMailGun(mr *Mailer, m *Mail) (string, error) {
 	mg := mailgun.NewMailgun(mr.MailGunDomain, mr.MailGunKey)
+	msg, err := buildMailgunMessage(mg, m)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, id, err := mg.Send(ctx, msg)
+	return id, err
+}
+
+func buildMailgunMessage(mg *mailgun.MailgunImpl, m *Mail) (*mailgun.Message, error) {
+	if err := validateUnsubscribeURL(m.UnsubscribeURL); err != nil {
+		return nil, err
+	}
 
 	fromname := defaultFromName
 	if m.FromName.Valid {
@@ -60,21 +74,33 @@ func useMailGun(mr *Mailer, m *Mail) (string, error) {
 	)
 
 	msg.SetHtml(m.HTMLBody)
+	addUnsubscribeHeaders(m.UnsubscribeURL, msg.AddHeader)
 
 	for _, a := range m.Attachments {
 		msg.AddBufferAttachment(a.Name, a.Content)
 	}
 
 	msg.SetTracking(false)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
-	defer cancel()
-
-	_, id, err := mg.Send(ctx, msg)
-
-	return id, err
+	return msg, nil
 }
 
 func useSendGrid(mr *Mailer, m *Mail) error {
+	message, err := buildSendGridMessage(m, mr.UseSandbox)
+	if err != nil {
+		return err
+	}
+	client := sendgrid.NewSendClient(mr.SendGridKey)
+	response, err := client.Send(message)
+	if err == nil && response.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("%s", response.Body)
+	}
+	return err
+}
+
+func buildSendGridMessage(m *Mail, useSandbox bool) (*mail.SGMailV3, error) {
+	if err := validateUnsubscribeURL(m.UnsubscribeURL); err != nil {
+		return nil, err
+	}
 	fromname := defaultFromName
 	if m.FromName.Valid {
 		fromname = m.FromName.String
@@ -94,8 +120,9 @@ func useSendGrid(mr *Mailer, m *Mail) error {
 	to := mail.NewEmail(toname, m.ToAddr)
 
 	message := mail.NewSingleEmail(from, m.Title, to, m.TextBody, m.HTMLBody)
+	addUnsubscribeHeaders(m.UnsubscribeURL, func(k, v string) { message.SetHeader(k, v) })
 
-	if (mr.UseSandbox) {
+	if useSandbox {
 		ms := mail.NewMailSettings()
 		sbMode := mail.NewSetting(true)
 		ms.SetSandboxMode(sbMode)
@@ -113,15 +140,5 @@ func useSendGrid(mr *Mailer, m *Mail) error {
 		attach.SetDisposition("attachment")
 		message.AddAttachment(attach)
 	}
-	client := sendgrid.NewSendClient(mr.SendGridKey)
-	response, err := client.Send(message)
-	if err == nil {
-		fmt.Println("Got status code: ", response.StatusCode)
-		/* If not a 200 era code, send a message */
-		if response.StatusCode >= http.StatusMultipleChoices {
-			return fmt.Errorf("%s", response.Body)
-		}
-	}
-
-	return err
+	return message, nil
 }

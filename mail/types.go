@@ -22,6 +22,7 @@ type (
 	Timestamp time.Time
 
 	MailRequest struct {
+		UnsubscribeURL string `json:"unsubscribe_url,omitempty"`
 		JobKey string `json:"job_key"`
 		Subscription string `json:"subscription,omitempty"`
 		Missive     string   `json:"missive,omitempty"`
@@ -57,6 +58,7 @@ type (
 	}
 
 	Mail struct {
+		UnsubscribeURL string `db:"unsubscribe_url"`
 		JobKey string `db:"job_key"`
 		Sub    sql.NullString `db:"sub"`
 		Missive sql.NullString `db:"missive"`
@@ -83,7 +85,9 @@ type (
 )
 
 func ConvertMailRequest(job MailRequest) (*Mail, error) {
+	if err := validateUnsubscribeURL(job.UnsubscribeURL); err != nil {return nil, err}
 	m := &Mail{
+ UnsubscribeURL: job.UnsubscribeURL,
 		JobKey: job.JobKey,
 		Sub:    sql.NullString{
 			Valid: job.Subscription != "",
