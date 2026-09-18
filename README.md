@@ -94,3 +94,23 @@ You probably don't have the HMAC secret, so you're probably not authorized to hi
 
 
 NO WARRANTY IMPLIED, GUARANTEED TO BE FAULTY.
+
+### Read-only queue monitoring
+
+Set a separate `METRICS_TOKEN` in the runtime secrets file to enable `GET /metrics`.
+Scrapes require `Authorization: Bearer <METRICS_TOKEN>`; this token cannot submit
+or cancel email. Without a token the endpoint returns 404, invalid tokens return
+401, and datastore failures return 503 rather than reporting an empty queue.
+
+`mailer_jobs{state=...}` exposes fixed states: pending, in_flight, retrying,
+exhausted (20 attempts), provider_accepted and cancelled. No recipient, subject,
+job key, subscription key or mail domain appears in labels. Provider acceptance
+is not inbox delivery and does not capture later bounces or complaints.
+`mailer_oldest_attempt_overdue_seconds` measures lateness against the current
+scheduled attempt time; a retry changes that schedule, so this is not total
+message age. Metrics are read-only and never claim a delivery batch.
+
+Deploy a separate Prometheus scrape with the read-only bearer credential and route
+exhausted-retry and overdue-attempt alerts independently of this email pipeline.
+The Alerts repository supplies tested rules in `deploy/alerts-rules.yml`. Verify
+real scraping, routing and provider bounce handling before launch.

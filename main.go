@@ -156,7 +156,7 @@ func main() {
 	/* Listen for incoming mail requests */
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("%s:%s", "", env.Port),
-		Handler: mail.SetupRoutes(ds, env.Secret),
+		Handler: mail.SetupRoutesWithMetrics(ds, env.Secret, os.Getenv("METRICS_TOKEN")),
 	}
 
 	fmt.Printf("Starting application on port %s\n", env.Port)
