@@ -2,6 +2,7 @@ package mail
 
 import (
 	"crypto/sha256"
+ "crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -30,14 +31,15 @@ func returnSuccess(w http.ResponseWriter) {
 }
 
 func checkKey(secret string, r *http.Request) error {
-	/* Expect a header: Authorization: xxx */
+	// Preserve the existing signed-request protocol without logging bearer material.
+ if secret == "" { return fmt.Errorf("authentication is not configured") }
 	authToken := r.Header.Get("Authorization")
 	timestamp := r.Header.Get("X-Base58-Timestamp")
 
 	if timestamp == "" {
 		return fmt.Errorf("Missing timestamp")
 	}
-	val, err := strconv.ParseInt(timestamp, 10, 32)
+	val, err := strconv.ParseInt(timestamp, 10, 64)
 	if err != nil {
 		return err
 	}
@@ -56,9 +58,7 @@ func checkKey(secret string, r *http.Request) error {
 	h.Write([]byte(r.Method))
 	expToken := hex.EncodeToString(h.Sum(nil))
 
-	if authToken != expToken {
-		fmt.Println("inputs:", timestamp, r.URL.Path, r.Method)
-		fmt.Printf("expected %s, got %s", expToken, authToken)
+	if subtle.ConstantTimeCompare([]byte(authToken), []byte(expToken)) != 1 {
 		return fmt.Errorf("Invalid auth token")
 	}
 	return nil
