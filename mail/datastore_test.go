@@ -98,8 +98,8 @@ func TestDataSaveMail(t *tt.T) {
 
 	/* Try to reinsert */
 	err = ds.ScheduleMail(mail)
-	if err == nil {
-		t.Errorf("was expecting err, didn't get one")
+	if err != nil {
+		t.Errorf("duplicate submission was not acknowledged: %s", err)
 	}
 	checkMailState(t, ds, UNSENT, 1)
 

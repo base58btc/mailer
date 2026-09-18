@@ -246,6 +246,8 @@ func (ds *Datastore) GetMail(idemKey string) (*Mail, error) {
 	return &mail, err
 }
 
+// ScheduleMail acknowledges repeat submissions without modifying the original
+// message or delivery state. A lost HTTP response must not cause another send.
 func (ds *Datastore) ScheduleMail(m *Mail) error {
 	stmt := `INSERT INTO scheduled (
 			idem_key,
@@ -263,7 +265,8 @@ func (ds *Datastore) ScheduleMail(m *Mail) error {
 			attachments,
 			send_at,
 			mail_domain
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ ON CONFLICT(idem_key) DO NOTHING`
 
 	_, err := ds.Data.Exec(stmt, m.IdemKey(), m.JobKey, m.Sub, m.Missive, m.ToAddr, m.ToName, m.FromAddr, m.FromName, m.ReplyTo, m.Title, m.HTMLBody, m.TextBody, m.Attachments, m.SendAt, m.Domain)
 

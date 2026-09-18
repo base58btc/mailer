@@ -9,6 +9,18 @@ PUT: Send up a MailRequest (json) to schedule a job
 
 To schedule a new job, call `/job` as PUT
 
+Successful submissions return JSON with `success: true` and `code: 200` after
+the job is stored. Check the JSON result as well as the HTTP status: this API can
+return `success: false` in an HTTP 200 response.
+
+Retries with the same `job_key`, `to_addr`, and `title` acknowledge the existing
+job without changing its contents, schedule, attempt count, or delivery state.
+This includes jobs already sent. Keep all three values stable when retrying a
+request whose response was lost. Changing the recipient or title creates a
+different job; changing only the body does not update an existing job. Acceptance
+means the queue owns the job, not that the recipient received it. This protection
+lasts while the queue record exists; deleting it removes the duplicate marker.
+
 ```
 curl https://localhost:8889/job -X PUT \
 	--data '{"job_key": "keyless", \
