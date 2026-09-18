@@ -142,3 +142,12 @@ payloads are never retained. Recipient blocks persist until an operator-reviewed
 recovery procedure is implemented. Pre-integration emails without the queue variable
 cannot be matched. Real provider verification, operator recovery, and surfacing the
 blocked destination to Alerts remain launch work.
+
+Authenticated `POST /recipient-status` accepts `{"domain":"example.test",
+"recipient":"person@example.test"}` using the existing signed-request credentials.
+It returns an explicit `blocked` boolean and either an empty reason, `hard_bounce`,
+or `complaint`, without echoing the recipient. Lookups are scoped to the supplied
+sending domain. The API uses POST and `Cache-Control: no-store` to keep addresses
+out of query strings and caches. It never clears suppression or changes consent.
+The `recipient_status` capability advertises this contract; a failed lookup means
+unknown status, not proof that the address is deliverable.

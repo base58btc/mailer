@@ -183,6 +183,7 @@ func SetupRoutesWithMetrics(ds *Datastore, secret, metricsToken string) http.Han
 
 func SetupRoutesWithMailgun(ds *Datastore, secret, metricsToken, signingKey string, domains []string) http.Handler {
 	r := mux.NewRouter()
+ r.HandleFunc("/recipient-status",func(w http.ResponseWriter,r *http.Request){HandleRecipientStatus(w,r,ds,secret)}).Methods("POST")
  r.HandleFunc("/webhooks/mailgun",func(w http.ResponseWriter,r *http.Request){HandleMailgunFeedback(w,r,ds,signingKey,domains)}).Methods("POST")
  r.HandleFunc("/metrics",func(w http.ResponseWriter,r *http.Request){HandleMetrics(w,r,ds,metricsToken)}).Methods("GET")
  r.HandleFunc("/capabilities",func(w http.ResponseWriter,r *http.Request){HandleCapabilities(w,r,secret)}).Methods("GET")
