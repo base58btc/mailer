@@ -34,7 +34,7 @@ func OpenReconciliationStore(path string) (*Datastore, error) {
 	}
 	connection.SetMaxOpenConns(1)
 	var count int
-	if err = connection.Get(&count, `SELECT count(*) FROM mail_delivery_reconciliations`); err != nil {
+	if err = connection.Get(&count, `SELECT count(*) FROM (SELECT action FROM mail_delivery_reconciliations LIMIT 1)`); err != nil {
 		connection.Close()
 		return nil, errors.New("queue schema must be upgraded by the mailer before reconciliation")
 	}
@@ -71,9 +71,26 @@ type AcceptanceReconciliation struct {
 }
 
 func (ds *Datastore) ReconcileProviderAcceptance(input AcceptanceReconciliation, now time.Time) error {
+	return ds.reconcileDelivery(input, "accepted", now)
+}
+
+// Retry evidence must establish non-acceptance, not merely missing provider logs.
+// This operation makes the job eligible for the normal worker, which rechecks
+// suppression before sending. It never resets the existing retry budget.
+func (ds *Datastore) ReconcileProviderNonAcceptance(input AcceptanceReconciliation, now time.Time) error {
+	if input.MessageID != "" {
+		return errors.New("non-acceptance cannot include a provider acceptance ID")
+	}
+	return ds.reconcileDelivery(input, "retry", now)
+}
+
+func (ds *Datastore) reconcileDelivery(input AcceptanceReconciliation, action string, now time.Time) error {
 	input.Domain = strings.ToLower(strings.TrimSpace(input.Domain))
 	input.MessageID = normalizeProviderMessageID(input.MessageID)
-	for _, value := range []string{input.OperationID, input.Actor, input.EvidenceRef, input.Domain, input.MessageID} {
+	if action == "accepted" && input.MessageID == "" {
+		return errors.New("provider message ID required")
+	}
+	for _, value := range []string{input.OperationID, input.Actor, input.EvidenceRef, input.Domain} {
 		if value == "" || len(value) > 512 || strings.TrimSpace(value) != value || strings.ContainsAny(value, "\r\n\x00") {
 			return errors.New("bounded operator identity and provider evidence required")
 		}
@@ -86,10 +103,13 @@ func (ds *Datastore) ReconcileProviderAcceptance(input AcceptanceReconciliation,
 		return err
 	}
 	defer tx.Rollback()
-	var previous AcceptanceReconciliation
-	err = tx.Get(&previous, `SELECT operation_id,idem_key,actor,evidence_ref,provider_domain,provider_message_id FROM mail_delivery_reconciliations WHERE operation_id=?`, input.OperationID)
+	var previous struct {
+		AcceptanceReconciliation
+		Action string `db:"action"`
+	}
+	err = tx.Get(&previous, `SELECT operation_id,idem_key,actor,evidence_ref,provider_domain,provider_message_id,action FROM mail_delivery_reconciliations WHERE operation_id=?`, input.OperationID)
 	if err == nil {
-		if previous != input {
+		if previous.AcceptanceReconciliation != input || previous.Action != action {
 			return errors.New("reconciliation operation conflicts with recorded evidence")
 		}
 		return tx.Commit()
@@ -112,10 +132,30 @@ func (ds *Datastore) ReconcileProviderAcceptance(input AcceptanceReconciliation,
 	if job.Domain != input.Domain {
 		return errors.New("provider domain does not match recorded sending domain")
 	}
-	if err = recordProviderAcceptance(tx, input.QueueID, input.Domain, input.MessageID, now); err != nil {
-		return err
+	if action == "accepted" {
+		if err = recordProviderAcceptance(tx, input.QueueID, input.Domain, input.MessageID, now); err != nil {
+			return err
+		}
+	} else {
+		result, err := tx.Exec(`UPDATE scheduled SET state='failed' WHERE idem_key=? AND state='delivery_unknown' AND try_count<20 AND to_addr<>''
+   AND NOT EXISTS(SELECT 1 FROM mail_provider_acceptances WHERE idem_key=scheduled.idem_key)
+   AND NOT EXISTS(SELECT 1 FROM mail_provider_outcomes WHERE idem_key=scheduled.idem_key)
+   AND NOT EXISTS(SELECT 1 FROM mail_job_erasures WHERE job_key=scheduled.job_key)
+   AND NOT EXISTS(SELECT 1 FROM mail_suppressions WHERE (scope='job' AND suppression_key=scheduled.job_key) OR (scope='subscription' AND suppression_key=scheduled.sub))
+   AND NOT EXISTS(SELECT 1 FROM mail_recipient_suppressions WHERE recipient=lower(scheduled.to_addr) AND domain=?)`, input.QueueID, input.Domain)
+		if err != nil {
+			return err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return errors.New("retry blocked by queue state, retry limit, provider evidence, suppression or erasure")
+		}
 	}
-	if _, err = tx.Exec(`INSERT INTO mail_delivery_reconciliations(operation_id,idem_key,actor,evidence_ref,provider_domain,provider_message_id,recorded_at) VALUES(?,?,?,?,?,?,?)`, input.OperationID, input.QueueID, input.Actor, input.EvidenceRef, input.Domain, input.MessageID, now.Unix()); err != nil {
+
+	if _, err = tx.Exec(`INSERT INTO mail_delivery_reconciliations(operation_id,idem_key,actor,evidence_ref,provider_domain,provider_message_id,recorded_at,action) VALUES(?,?,?,?,?,?,?,?)`, input.OperationID, input.QueueID, input.Actor, input.EvidenceRef, input.Domain, input.MessageID, now.Unix(), action); err != nil {
 		return err
 	}
 	return tx.Commit()

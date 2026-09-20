@@ -47,6 +47,7 @@ var db_migration_exec = []string{
 	`CREATE TABLE mail_delivery_reconciliations(operation_id TEXT PRIMARY KEY,idem_key TEXT NOT NULL REFERENCES scheduled(idem_key),actor TEXT NOT NULL,evidence_ref TEXT NOT NULL,provider_domain TEXT NOT NULL,provider_message_id TEXT NOT NULL,recorded_at INTEGER NOT NULL);`,
 	`CREATE TRIGGER mail_reconciliations_no_update BEFORE UPDATE ON mail_delivery_reconciliations BEGIN SELECT RAISE(ABORT,'reconciliation evidence is immutable'); END;`,
 	`CREATE TRIGGER mail_reconciliations_no_delete BEFORE DELETE ON mail_delivery_reconciliations BEGIN SELECT RAISE(ABORT,'reconciliation evidence is immutable'); END;`,
+	`ALTER TABLE mail_delivery_reconciliations ADD COLUMN action TEXT NOT NULL DEFAULT 'accepted' CHECK(action IN ('accepted','retry'));`,
 }
 
 func (ds *Datastore) CurrMigrations() int {

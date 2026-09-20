@@ -304,8 +304,35 @@ Acceptance and the immutable operator/evidence audit commit in one transaction.
 The timestamp records when reconciliation was observed locally. The command
 rejects active sends and a mismatched sending domain. It can attach acceptance
 evidence after cancellation/erasure without restoring content or reactivating
-delivery. Nothing in this command sends email or requeues an ambiguous job.
-Leave inconclusive cases quarantined; confirmed non-acceptance/retry handling
-still requires an explicit operator procedure rather than automated guessing.
+delivery. The acceptance action does not send or requeue mail. Leave inconclusive cases
+quarantined. When provider evidence definitively confirms non-acceptance, the
+separate action below permits normal worker delivery.
 Tests cover audit-write rollback, immutable history, exact replay/conflicts,
 opening alongside an active send, pagination, confirmation and erasure.
+
+
+For confirmed non-acceptance, record a new operation with no message ID:
+
+```sh
+mailer-reconcile -db /path/to/mailer.db -action confirm-not-accepted \
+  -queue-id QUEUE_ID -domain mail.example \
+  -operation-id NEW_INCIDENT_OPERATION_ID -actor OPERATOR_ID \
+  -evidence-ref PROVIDER_CONFIRMED_NON_ACCEPTANCE_REFERENCE -confirm
+```
+
+This action **enables delivery by the running worker**. Verify definitive
+non-acceptance for this exact queue ID/domain; missing logs, elapsed time or an
+unknown timeout are insufficient. The tool records the operator's assertion; it
+does not verify provider support records itself. It rejects any stored provider
+acceptance or outcome, including early callbacks not yet visible in job status.
+It also rejects active/cancelled/erased/suppressed jobs and exhausted retry limits.
+Retry counts and the original schedule are preserved; normal suppression checks
+still run immediately before delivery.
+
+The retry transition and immutable action/evidence audit are atomic. An exact
+operation replay returns success without changing queue state, even if the job
+has since experienced a new interruption. That new interruption needs a fresh
+investigation and operation ID. An operation ID cannot be reused for a different
+action or evidence. Tests cover rollback, contradictory evidence, cancellation,
+erasure, late unsubscribe, retry limits and stale replay. No production job was
+requeued to exercise these checks.
