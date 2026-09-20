@@ -151,3 +151,26 @@ sending domain. The API uses POST and `Cache-Control: no-store` to keep addresse
 out of query strings and caches. It never clears suppression or changes consent.
 The `recipient_status` capability advertises this contract; a failed lookup means
 unknown status, not proof that the address is deliverable.
+
+
+### Job payload erasure
+
+Authenticated `PUT /erasure` accepts `{"scope":"job","key":"original-job-key"}`
+using the same timestamp/path/method authentication as `/job`. The capabilities
+response advertises `job_erasure`. Only a single job key is accepted; callers must
+not substitute a whole subscription or recipient address.
+
+One SQLite transaction stores permanent job suppression, clears message addresses,
+names, reply-to, subject, bodies, attachments, domain, subscription/missive pointers
+and unsubscribe URL, and records the job key with its erasure timestamp. Unsent or
+in-flight rows become cancelled; sent state, attempt count, schedule time and the
+original idempotency hash remain as delivery evidence. An absent job still gets a
+tombstone, preventing delayed submission from restoring its payload. Repeat erasure
+is safe. Ordinary `/suppression` retains message payloads and is unchanged.
+
+Success means this transaction committed in the active database. It does not recall
+provider calls already in flight, remove provider-side records, scrub logs/backups,
+or guarantee physical overwriting of SQLite pages/WAL files. Caller-side account
+deletion must track those remaining retention obligations separately. Tests cover
+sent and in-flight jobs, erasure-before-enqueue, datastore restart, retry, all stored
+content fields, transaction rollback, and authenticated request validation.

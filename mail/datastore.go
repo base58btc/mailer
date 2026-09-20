@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sqlx.DB
@@ -36,10 +36,11 @@ var db_migration_exec = []string{
 	`ALTER TABLE scheduled ADD COLUMN mail_domain TEXT;`,
 	`ALTER TABLE scheduled ADD COLUMN sub TEXT;`,
 	`ALTER TABLE scheduled ADD COLUMN missive TEXT;`,
- `ALTER TABLE scheduled ADD COLUMN unsubscribe_url TEXT NOT NULL DEFAULT '';`,
- `CREATE TABLE mail_suppressions(scope TEXT NOT NULL CHECK(scope IN ('job','subscription')), suppression_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(scope,suppression_key));`,
- `CREATE TABLE mailgun_feedback_tokens(token_hash TEXT PRIMARY KEY,event_id TEXT NOT NULL,domain TEXT NOT NULL,created_at INTEGER NOT NULL);`,
- `CREATE TABLE mail_recipient_suppressions(domain TEXT NOT NULL,recipient TEXT NOT NULL,reason TEXT NOT NULL CHECK(reason IN ('hard_bounce','complaint')),created_at INTEGER NOT NULL,PRIMARY KEY(domain,recipient));`,
+	`ALTER TABLE scheduled ADD COLUMN unsubscribe_url TEXT NOT NULL DEFAULT '';`,
+	`CREATE TABLE mail_suppressions(scope TEXT NOT NULL CHECK(scope IN ('job','subscription')), suppression_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(scope,suppression_key));`,
+	`CREATE TABLE mailgun_feedback_tokens(token_hash TEXT PRIMARY KEY,event_id TEXT NOT NULL,domain TEXT NOT NULL,created_at INTEGER NOT NULL);`,
+	`CREATE TABLE mail_recipient_suppressions(domain TEXT NOT NULL,recipient TEXT NOT NULL,reason TEXT NOT NULL CHECK(reason IN ('hard_bounce','complaint')),created_at INTEGER NOT NULL,PRIMARY KEY(domain,recipient));`,
+	`CREATE TABLE mail_job_erasures(job_key TEXT PRIMARY KEY,erased_at INTEGER NOT NULL);`,
 }
 
 func (ds *Datastore) CurrMigrations() int {
@@ -47,11 +48,12 @@ func (ds *Datastore) CurrMigrations() int {
 }
 
 type ScheduleState string
+
 const (
 	UNSENT ScheduleState = "unsent"
 	INPROG ScheduleState = "inprog"
 	FAILED ScheduleState = "failed"
-	SENT ScheduleState = "sent"
+	SENT   ScheduleState = "sent"
 )
 
 func setupTables() error {
@@ -223,7 +225,6 @@ func (ds *Datastore) CancelJob(jobKey string) {
 	ds.Data.MustExec(stmt, jobKey)
 }
 
-
 func (ds *Datastore) RescheduleFailed(idemKey string, tryCount int, sendAt int64) {
 	stmt := `UPDATE scheduled 
 		SET 
@@ -296,7 +297,7 @@ func DatastoreNew(dbConn string) (*Datastore, error) {
 		return nil, err
 	}
 
-	ds := &Datastore{ Data: db, }
+	ds := &Datastore{Data: db}
 
 	/* Always reset on start */
 	ds.ResetInProgress()

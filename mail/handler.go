@@ -2,12 +2,12 @@ package mail
 
 import (
 	"crypto/sha256"
- "crypto/subtle"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
-	"net/http"
-	"github.com/gorilla/mux"
 	"fmt"
+	"github.com/gorilla/mux"
+	"net/http"
 	"strconv"
 	"time"
 )
@@ -16,7 +16,7 @@ func returnErr(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&ReturnVal{
 		Success: false,
-		Code: http.StatusBadRequest,
+		Code:    http.StatusBadRequest,
 		Message: err.Error(),
 	})
 }
@@ -25,14 +25,16 @@ func returnSuccess(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&ReturnVal{
 		Success: true,
-		Code: http.StatusOK,
+		Code:    http.StatusOK,
 		Message: "",
 	})
 }
 
 func checkKey(secret string, r *http.Request) error {
 	// Preserve the existing signed-request protocol without logging bearer material.
- if secret == "" { return fmt.Errorf("authentication is not configured") }
+	if secret == "" {
+		return fmt.Errorf("authentication is not configured")
+	}
 	authToken := r.Header.Get("Authorization")
 	timestamp := r.Header.Get("X-Base58-Timestamp")
 
@@ -174,34 +176,35 @@ func DeleteSubJob(w http.ResponseWriter, r *http.Request, ds *Datastore, secret 
 }
 
 func SetupRoutes(ds *Datastore, secret string) http.Handler {
- return SetupRoutesWithMetrics(ds,secret,"")
+	return SetupRoutesWithMetrics(ds, secret, "")
 }
 
 func SetupRoutesWithMetrics(ds *Datastore, secret, metricsToken string) http.Handler {
- return SetupRoutesWithMailgun(ds,secret,metricsToken,"",nil)
+	return SetupRoutesWithMailgun(ds, secret, metricsToken, "", nil)
 }
 
 func SetupRoutesWithMailgun(ds *Datastore, secret, metricsToken, signingKey string, domains []string) http.Handler {
 	r := mux.NewRouter()
- r.HandleFunc("/recipient-status",func(w http.ResponseWriter,r *http.Request){HandleRecipientStatus(w,r,ds,secret)}).Methods("POST")
- r.HandleFunc("/webhooks/mailgun",func(w http.ResponseWriter,r *http.Request){HandleMailgunFeedback(w,r,ds,signingKey,domains)}).Methods("POST")
- r.HandleFunc("/metrics",func(w http.ResponseWriter,r *http.Request){HandleMetrics(w,r,ds,metricsToken)}).Methods("GET")
- r.HandleFunc("/capabilities",func(w http.ResponseWriter,r *http.Request){HandleCapabilities(w,r,secret)}).Methods("GET")
- r.HandleFunc("/suppression",func(w http.ResponseWriter,r *http.Request){HandleSuppression(w,r,ds,secret)}).Methods("PUT")
+	r.HandleFunc("/recipient-status", func(w http.ResponseWriter, r *http.Request) { HandleRecipientStatus(w, r, ds, secret) }).Methods("POST")
+	r.HandleFunc("/webhooks/mailgun", func(w http.ResponseWriter, r *http.Request) { HandleMailgunFeedback(w, r, ds, signingKey, domains) }).Methods("POST")
+	r.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) { HandleMetrics(w, r, ds, metricsToken) }).Methods("GET")
+	r.HandleFunc("/capabilities", func(w http.ResponseWriter, r *http.Request) { HandleCapabilities(w, r, secret) }).Methods("GET")
+	r.HandleFunc("/erasure", func(w http.ResponseWriter, r *http.Request) { HandleErasure(w, r, ds, secret) }).Methods("PUT")
+	r.HandleFunc("/suppression", func(w http.ResponseWriter, r *http.Request) { HandleSuppression(w, r, ds, secret) }).Methods("PUT")
 
-	r.HandleFunc("/job", func (w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/job", func(w http.ResponseWriter, r *http.Request) {
 		HandleMailJob(w, r, ds, secret)
 	}).Methods("PUT")
 
-	r.HandleFunc("/job", func (w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/job", func(w http.ResponseWriter, r *http.Request) {
 		DeleteMailJob(w, r, ds, secret)
 	}).Methods("DELETE")
 
-	r.HandleFunc("/sub", func (w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/sub", func(w http.ResponseWriter, r *http.Request) {
 		DeleteSubJob(w, r, ds, secret)
 	}).Methods("DELETE")
 
-	r.HandleFunc("/missive", func (w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/missive", func(w http.ResponseWriter, r *http.Request) {
 		DeleteMissive(w, r, ds, secret)
 	}).Methods("DELETE")
 
