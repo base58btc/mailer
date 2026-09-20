@@ -2,6 +2,7 @@ package mail
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"net/http"
@@ -37,14 +38,63 @@ func (ds *Datastore) ApplyMailgunFeedback(e MailgunEvent, token string, now time
 		return tx.Commit()
 	}
 	var matched int
-	if err = tx.Get(&matched, `SELECT count(*) FROM scheduled WHERE idem_key=? AND lower(to_addr)=? AND (mail_domain IS NULL OR mail_domain='' OR lower(mail_domain)=?)`, e.Variables.QueueID, recipient, domain); err != nil {
+	if err = tx.Get(&matched, `SELECT count(*) FROM scheduled WHERE idem_key=? AND lower(to_addr)=? AND (coalesce(nullif(actual_provider_domain,''),mail_domain,'')='' OR lower(coalesce(nullif(actual_provider_domain,''),mail_domain,''))=?)`, e.Variables.QueueID, recipient, domain); err != nil {
 		return err
 	}
 	if matched != 1 {
+		// After erasure there is no recipient address left to match. Acknowledge
+		// without retaining new recipient-derived suppression or result data.
+		var erased int
+		if err := tx.Get(&erased, `SELECT count(*) FROM scheduled s JOIN mail_job_erasures e ON e.job_key=s.job_key WHERE s.idem_key=?`, e.Variables.QueueID); err != nil {
+			return err
+		}
+		if erased == 1 {
+			return tx.Commit()
+		}
+		return ErrMailgunAssociation
+	}
+	outcome := e.DeliveryOutcome()
+	messageID := normalizeProviderMessageID(e.Message.Headers.MessageID)
+	if outcome != "" {
+		var accepted struct {
+			Domain string `db:"provider_domain"`
+			ID     string `db:"provider_message_id"`
+		}
+		err := tx.Get(&accepted, `SELECT provider_domain,provider_message_id FROM mail_provider_acceptances WHERE idem_key=?`, e.Variables.QueueID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if err == nil && (accepted.Domain != domain || normalizeProviderMessageID(accepted.ID) != messageID) {
+			return ErrMailgunAssociation
+		}
+	}
+	if outcome != "" && messageID == "" && e.RecipientSuppressionReason() == "" {
 		return ErrMailgunAssociation
 	}
 	if _, err = tx.Exec(`INSERT INTO mailgun_feedback_tokens(token_hash,event_id,domain,created_at) VALUES(?,?,?,?)`, hash, e.ID, domain, now.Unix()); err != nil {
 		return err
+	}
+	if outcome != "" && messageID != "" {
+		delivered, failed, bounced, complained := int64(0), int64(0), int64(0), int64(0)
+		switch outcome {
+		case "delivered":
+			delivered = now.Unix()
+		case "failed":
+			failed = now.Unix()
+		case "bounced":
+			bounced = now.Unix()
+		case "complained":
+			complained = now.Unix()
+		}
+		_, err := tx.Exec(`INSERT INTO mail_provider_outcomes(idem_key,provider_domain,provider_message_id,delivered_at,failed_at,bounced_at,complained_at) VALUES(?,?,?,?,?,?,?)
+   ON CONFLICT(idem_key,provider_domain,provider_message_id) DO UPDATE SET
+   delivered_at=CASE WHEN mail_provider_outcomes.delivered_at=0 THEN excluded.delivered_at ELSE mail_provider_outcomes.delivered_at END,
+   failed_at=CASE WHEN mail_provider_outcomes.failed_at=0 THEN excluded.failed_at ELSE mail_provider_outcomes.failed_at END,
+   bounced_at=CASE WHEN mail_provider_outcomes.bounced_at=0 THEN excluded.bounced_at ELSE mail_provider_outcomes.bounced_at END,
+   complained_at=CASE WHEN mail_provider_outcomes.complained_at=0 THEN excluded.complained_at ELSE mail_provider_outcomes.complained_at END`, e.Variables.QueueID, domain, messageID, delivered, failed, bounced, complained)
+		if err != nil {
+			return err
+		}
 	}
 	if reason := e.RecipientSuppressionReason(); reason != "" {
 		if _, err = tx.Exec(`INSERT INTO mail_recipient_suppressions(domain,recipient,reason,created_at) VALUES(?,?,?,?) ON CONFLICT(domain,recipient) DO NOTHING`, domain, recipient, reason, now.Unix()); err != nil {
@@ -87,8 +137,8 @@ func HandleMailgunFeedback(w http.ResponseWriter, r *http.Request, ds *Datastore
 		http.Error(w, "unknown sending domain", http.StatusNotAcceptable)
 		return
 	}
-	// Non-suppression feedback does not require persistence or replay state.
-	if event.RecipientSuppressionReason() == "" {
+	// Ignore events outside the delivery-result/suppression contract.
+	if event.RecipientSuppressionReason() == "" && event.DeliveryOutcome() == "" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}

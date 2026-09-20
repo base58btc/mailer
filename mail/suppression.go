@@ -52,8 +52,8 @@ func (ds *Datastore) BeginDeliveryForDomain(idemKey, domain string) (bool, error
  AND s.domain=lower(CASE WHEN ?='' THEN coalesce(scheduled.mail_domain,'') ELSE ? END))`, idemKey, domain, domain); err != nil {
 		return false, err
 	}
-	result, err := tx.Exec(`UPDATE scheduled SET state='sending' WHERE idem_key=? AND state='inprog'
- AND NOT EXISTS(SELECT 1 FROM mail_suppressions WHERE (scope='job' AND suppression_key=scheduled.job_key) OR (scope='subscription' AND suppression_key=scheduled.sub))`, idemKey)
+	result, err := tx.Exec(`UPDATE scheduled SET state='sending',actual_provider_domain=lower(?) WHERE idem_key=? AND state='inprog'
+ AND NOT EXISTS(SELECT 1 FROM mail_suppressions WHERE (scope='job' AND suppression_key=scheduled.job_key) OR (scope='subscription' AND suppression_key=scheduled.sub))`, domain, idemKey)
 	if err != nil {
 		return false, err
 	}

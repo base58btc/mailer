@@ -65,4 +65,19 @@ func TestMailgunWebhookCommitsBeforeAcknowledging(t *testing.T) {
 	if err = ds.Data.Get(&n, `SELECT count(*) FROM mail_recipient_suppressions`); err != nil || n != 1 {
 		t.Fatal(n, err)
 	}
+	// Delivery-only callbacks must be persisted, not merely acknowledged by the
+	// old suppression-only route. They may precede the send response.
+	event.ID, event.Event = "delivery-http-event", "delivered"
+	event.Message.Headers.MessageID = "delivered@example.test"
+	token = strings.Repeat("v", 50)
+	mac = hmac.New(sha256.New, []byte("signing"))
+	mac.Write([]byte(timestamp + token))
+	signature = hex.EncodeToString(mac.Sum(nil))
+	if status := request("signing", m.Domain); status != 200 {
+		t.Fatal("delivery callback failed", status)
+	}
+	if err := ds.Data.Get(&n, `SELECT count(*) FROM mail_provider_outcomes WHERE delivered_at>0`); err != nil || n != 1 {
+		t.Fatal("delivery callback acknowledged without persistence", n, err)
+	}
+
 }

@@ -15,7 +15,7 @@ import (
 // without restoring canceled content or making the job eligible for another send.
 func (ds *Datastore) RecordProviderAcceptance(key, domain, messageID string, now time.Time) error {
 	domain = strings.ToLower(strings.TrimSpace(domain))
-	if key == "" || domain == "" || len(domain) > 253 || messageID == "" || len(messageID) > 512 || strings.ContainsAny(messageID, "\r\n\x00") || now.IsZero() {
+	if key == "" || domain == "" || len(domain) > 253 || normalizeProviderMessageID(messageID) == "" || len(messageID) > 512 || strings.ContainsAny(messageID, "\r\n\x00") || now.IsZero() {
 		return errors.New("invalid provider acceptance")
 	}
 	tx, err := ds.Data.Beginx()
@@ -33,7 +33,7 @@ func (ds *Datastore) RecordProviderAcceptance(key, domain, messageID string, now
 	}
 	err = tx.Get(&existing, `SELECT provider_domain,provider_message_id FROM mail_provider_acceptances WHERE idem_key=?`, key)
 	if err == nil {
-		if existing.Domain != domain || existing.ID != messageID {
+		if existing.Domain != domain || normalizeProviderMessageID(existing.ID) != normalizeProviderMessageID(messageID) {
 			return errors.New("provider acceptance conflicts with recorded evidence")
 		}
 		return tx.Commit()
@@ -54,6 +54,10 @@ func (ds *Datastore) RecordProviderAcceptance(key, domain, messageID string, now
 }
 
 type JobStatus struct {
+	DeliveredAt       int64  `json:"delivered_at,omitempty" db:"delivered_at"`
+	FailedAt          int64  `json:"failed_at,omitempty" db:"failed_at"`
+	BouncedAt         int64  `json:"bounced_at,omitempty" db:"bounced_at"`
+	ComplainedAt      int64  `json:"complained_at,omitempty" db:"complained_at"`
 	JobKey            string `json:"job_key" db:"job_key"`
 	QueueState        string `json:"queue_state" db:"queue_state"`
 	ProviderDomain    string `json:"provider_domain,omitempty" db:"provider_domain"`
@@ -83,7 +87,7 @@ func (ds *Datastore) JobStatuses(keys []string) ([]JobStatus, error) {
 		var rows []JobStatus
 		// Legacy callers can reuse a job key with distinct message hashes, so keep
 		// each provider acceptance instead of guessing one message per logical key.
-		err := tx.Select(&rows, `SELECT s.job_key,s.state AS queue_state,coalesce(a.provider_domain,'') AS provider_domain,coalesce(a.provider_message_id,'') AS provider_message_id,coalesce(a.accepted_at,0) AS accepted_at,EXISTS(SELECT 1 FROM mail_job_erasures e WHERE e.job_key=s.job_key) AS erased FROM scheduled s LEFT JOIN mail_provider_acceptances a ON a.idem_key=s.idem_key WHERE s.job_key=? ORDER BY s.idem_key LIMIT 101`, key)
+		err := tx.Select(&rows, `SELECT coalesce(o.delivered_at,0) AS delivered_at,coalesce(o.failed_at,0) AS failed_at,coalesce(o.bounced_at,0) AS bounced_at,coalesce(o.complained_at,0) AS complained_at,s.job_key,s.state AS queue_state,coalesce(a.provider_domain,'') AS provider_domain,coalesce(a.provider_message_id,'') AS provider_message_id,coalesce(a.accepted_at,0) AS accepted_at,EXISTS(SELECT 1 FROM mail_job_erasures e WHERE e.job_key=s.job_key) AS erased FROM scheduled s LEFT JOIN mail_provider_acceptances a ON a.idem_key=s.idem_key LEFT JOIN mail_provider_outcomes o ON o.idem_key=a.idem_key AND o.provider_domain=a.provider_domain AND o.provider_message_id=trim(trim(a.provider_message_id),'<>') WHERE s.job_key=? ORDER BY s.idem_key LIMIT 101`, key)
 		if err != nil {
 			return nil, err
 		}
@@ -127,4 +131,15 @@ func HandleJobStatus(w http.ResponseWriter, r *http.Request, ds *Datastore, secr
 		Code    int         `json:"code"`
 		Jobs    []JobStatus `json:"jobs"`
 	}{true, http.StatusOK, rows})
+}
+
+func normalizeProviderMessageID(id string) string {
+	id = strings.TrimSpace(id)
+	if strings.HasPrefix(id, "<") && strings.HasSuffix(id, ">") {
+		id = id[1 : len(id)-1]
+	}
+	if id == "" || len(id) > 512 || strings.ContainsAny(id, "<> \r\n\x00") {
+		return ""
+	}
+	return id
 }

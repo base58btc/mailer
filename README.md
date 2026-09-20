@@ -223,3 +223,38 @@ the worker instead of deliberately rescheduling the accepted message.
 Tests cover rollback, restart, conflicting and duplicate acknowledgements,
 cancellation/erasure racing with acceptance, authenticated status requests and
 metrics without personal content. No live email provider was contacted.
+
+### Provider delivery outcomes
+
+The authenticated Mailgun webhook now persists delivered, permanent-failure,
+hard-bounce and complaint observations alongside its existing suppression behavior.
+The public payload contract is documented by
+[Mailgun](https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/webhook-payloads).
+Association checks use our queue variable, the recipient and the actual sending
+domain recorded before the provider call (including fallback domains). Once an
+acceptance record exists, its message ID must match the callback header; optional
+angle brackets are normalized for comparison. HTTPS and the configured provider
+signing key/domain allowlist remain required because the provider's signature
+covers its timestamp/token, not the entire JSON body.
+
+A callback arriving before send-response persistence is stored durably. `/job-status`
+only exposes its results when the provider domain/message ID matches the committed
+acceptance. Its optional `delivered_at`, `failed_at`, `bounced_at` and `complained_at`
+fields are Unix seconds when this service first recorded each observation, not
+provider event timestamps. Observations are independent and monotonic: a later
+complaint does not erase delivery evidence, and reordered/duplicate callbacks do
+not inflate counts. Test-mode, temporary-failure, open and click events are ignored.
+Legacy suppression callbacks without message IDs can still suppress recipients
+when no acceptance identity exists; they cannot create provider-result evidence.
+
+Callback replay markers, outcome updates and suppression changes commit together.
+Erased jobs ignore later feedback without restoring recipient-derived suppression
+records. No full callback bodies or recipient addresses are stored in the outcome
+table. The capability is `provider_delivery_outcomes`. Provider acceptance without
+an outcome remains unknown delivery; a recorded delivered event means acceptance
+by the recipient server, not proof of an inbox placement or human read.
+
+Fixture tests cover early callbacks, duplicate/reordered events, message/domain
+mismatches, fallback domains, transaction failures and late feedback after erasure.
+Live webhook configuration/rehearsal, unknown-send reconciliation and consumer
+polling remain deployment/integration work.

@@ -15,6 +15,11 @@ import (
 // MailgunEvent contains only fields needed to bind provider feedback to a
 // queued message. Never persist or log the complete webhook payload.
 type MailgunEvent struct {
+	Message struct {
+		Headers struct {
+			MessageID string `json:"message-id"`
+		} `json:"headers"`
+	} `json:"message"`
 	ID        string `json:"id"`
 	Event     string `json:"event"`
 	Severity  string `json:"severity"`
@@ -90,4 +95,25 @@ func VerifyMailgunEvent(r *http.Request, key string, now time.Time) (*MailgunEve
 	// Events from unrelated mail without our variable may encode user-variables as
 	// an empty array. They are rejected rather than guessing a queue association.
 	return &event, payload.Signature.Token, nil
+}
+
+// DeliveryOutcome is monotonic evidence, independent of queue/provider acceptance.
+func (e MailgunEvent) DeliveryOutcome() string {
+	if e.Flags.Test || e.Flags.SystemTest {
+		return ""
+	}
+	switch e.Event {
+	case "delivered":
+		return "delivered"
+	case "complained":
+		return "complained"
+	case "failed":
+		if e.Severity == "permanent" {
+			if e.RecipientSuppressionReason() == "hard_bounce" {
+				return "bounced"
+			}
+			return "failed"
+		}
+	}
+	return ""
 }
