@@ -258,3 +258,20 @@ Fixture tests cover early callbacks, duplicate/reordered events, message/domain
 mismatches, fallback domains, transaction failures and late feedback after erasure.
 Live webhook configuration/rehearsal, unknown-send reconciliation and consumer
 polling remain deployment/integration work.
+
+The same integration-only fixture supports campaign-result rehearsals. Set
+`FIXTURE_MAILGUN_SIGNING_KEY` and space-separated `FIXTURE_MAILGUN_DOMAINS` to enable
+the real signed webhook handler on its loopback listener. Offline fixture commands
+`-provider-job KEY -provider-phase begin -provider-domain DOMAIN` and
+`-provider-job KEY -provider-phase accept -provider-domain DOMAIN -provider-message-id ID`
+exercise send-state transitions and persist simulated provider evidence without
+contacting a provider. Use only a disposable fixture database; `begin` claims a
+batch of due fixture jobs. Both commands print the selected queue ID as their
+last JSON output line. Fixture server startup applies the real interrupted-send
+recovery, so an interrupted `sending` job becomes `delivery_unknown`.
+
+Insider's `TestConnectedMailerCampaignResultsPostgres` exercises this binary with
+real PostgreSQL, SQLite and signed HTTP callbacks: early delivery before provider
+acceptance, process restart, unknown-send quarantine, later identity confirmation,
+wrong-message rejection, repeated complaints and result retention after erasure.
+These local checks do not replace a live Mailgun configuration rehearsal.
