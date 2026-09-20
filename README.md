@@ -174,3 +174,20 @@ or guarantee physical overwriting of SQLite pages/WAL files. Caller-side account
 deletion must track those remaining retention obligations separately. Tests cover
 sent and in-flight jobs, erasure-before-enqueue, datastore restart, retry, all stored
 content fields, transaction rollback, and authenticated request validation.
+
+
+### Local connected erasure rehearsal
+
+Build the provider-free fixture only when running integration checks:
+
+```sh
+go build -tags=integration -o /private/tmp/btcpp-mailer-queue-fixture ./cmd/queue-fixture
+```
+
+It uses the real datastore and HTTP handlers, binds only an ephemeral loopback
+port, and never starts a send worker. Supply a disposable `-db`, `-ready-file`,
+and `FIXTURE_MAILER_SECRET`; `-inspect` prints aggregate content/erasure counts.
+The build tag excludes it from ordinary builds. Insider's opt-in
+`TestConnectedMailerErasurePostgres` starts this process, drops one acknowledgment,
+restarts it, and verifies logical SQLite erasure and prevention of stale payload
+reintroduction. The test does not contact an email provider.
