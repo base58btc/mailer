@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/jmoiron/sqlx"
 	"io"
 	"net/http"
 	"strings"
@@ -23,6 +24,13 @@ func (ds *Datastore) RecordProviderAcceptance(key, domain, messageID string, now
 		return err
 	}
 	defer tx.Rollback()
+	if err := recordProviderAcceptance(tx, key, domain, messageID, now); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func recordProviderAcceptance(tx *sqlx.Tx, key, domain, messageID string, now time.Time) error {
 	var state string
 	if err := tx.Get(&state, `SELECT state FROM scheduled WHERE idem_key=?`, key); err != nil {
 		return err
@@ -31,12 +39,12 @@ func (ds *Datastore) RecordProviderAcceptance(key, domain, messageID string, now
 		Domain string `db:"provider_domain"`
 		ID     string `db:"provider_message_id"`
 	}
-	err = tx.Get(&existing, `SELECT provider_domain,provider_message_id FROM mail_provider_acceptances WHERE idem_key=?`, key)
+	err := tx.Get(&existing, `SELECT provider_domain,provider_message_id FROM mail_provider_acceptances WHERE idem_key=?`, key)
 	if err == nil {
 		if existing.Domain != domain || normalizeProviderMessageID(existing.ID) != normalizeProviderMessageID(messageID) {
 			return errors.New("provider acceptance conflicts with recorded evidence")
 		}
-		return tx.Commit()
+		return nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
@@ -50,7 +58,7 @@ func (ds *Datastore) RecordProviderAcceptance(key, domain, messageID string, now
 	if _, err := tx.Exec(`UPDATE scheduled SET state='sent' WHERE idem_key=? AND state IN ('sending','inprog','delivery_unknown')`, key); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 type JobStatus struct {

@@ -44,6 +44,9 @@ var db_migration_exec = []string{
 	`CREATE TABLE mail_provider_acceptances(idem_key TEXT PRIMARY KEY REFERENCES scheduled(idem_key),provider_domain TEXT NOT NULL,provider_message_id TEXT NOT NULL,accepted_at INTEGER NOT NULL,UNIQUE(provider_domain,provider_message_id));`,
 	`ALTER TABLE scheduled ADD COLUMN actual_provider_domain TEXT NOT NULL DEFAULT '';`,
 	`CREATE TABLE mail_provider_outcomes(idem_key TEXT NOT NULL,provider_domain TEXT NOT NULL,provider_message_id TEXT NOT NULL,delivered_at INTEGER NOT NULL DEFAULT 0,failed_at INTEGER NOT NULL DEFAULT 0,bounced_at INTEGER NOT NULL DEFAULT 0,complained_at INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(idem_key,provider_domain,provider_message_id));`,
+	`CREATE TABLE mail_delivery_reconciliations(operation_id TEXT PRIMARY KEY,idem_key TEXT NOT NULL REFERENCES scheduled(idem_key),actor TEXT NOT NULL,evidence_ref TEXT NOT NULL,provider_domain TEXT NOT NULL,provider_message_id TEXT NOT NULL,recorded_at INTEGER NOT NULL);`,
+	`CREATE TRIGGER mail_reconciliations_no_update BEFORE UPDATE ON mail_delivery_reconciliations BEGIN SELECT RAISE(ABORT,'reconciliation evidence is immutable'); END;`,
+	`CREATE TRIGGER mail_reconciliations_no_delete BEFORE DELETE ON mail_delivery_reconciliations BEGIN SELECT RAISE(ABORT,'reconciliation evidence is immutable'); END;`,
 }
 
 func (ds *Datastore) CurrMigrations() int {

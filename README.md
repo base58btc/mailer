@@ -215,9 +215,8 @@ inside a provider send become `delivery_unknown` and are not automatically resen
 the provider may already have accepted them. They appear in the protected
 `mailer_jobs{state="delivery_unknown"}` metric and the status API. Reconcile these
 with provider evidence before deciding whether to retry; verified acceptance can
-be committed through `RecordProviderAcceptance` without another send. An operator
-reconciliation UI/command and provider delivered/failed/complained result ingestion
-remain follow-up work. A local persistence failure after provider success stops
+be committed through `RecordProviderAcceptance` without another send. The `mailer-reconcile` command below records operator-verified acceptance;
+provider delivery/failure/complaint results are ingested by the webhook. A local persistence failure after provider success stops
 the worker instead of deliberately rescheduling the accepted message.
 
 Tests cover rollback, restart, conflicting and duplicate acknowledgements,
@@ -275,3 +274,38 @@ real PostgreSQL, SQLite and signed HTTP callbacks: early delivery before provide
 acceptance, process restart, unknown-send quarantine, later identity confirmation,
 wrong-message rejection, repeated complaints and result retention after erasure.
 These local checks do not replace a live Mailgun configuration rehearsal.
+
+
+### Operator recovery of interrupted sends
+
+`mailer-reconcile` opens an existing, upgraded SQLite database without running
+migrations or startup recovery. It does not reset the live worker's in-flight
+jobs. Its default action lists at most 100 quarantined jobs as JSON, including
+queue ID, logical job key, actual sending domain and scheduled time, but no
+recipient or message content. Continue with `-after LAST_QUEUE_ID`.
+
+```sh
+mailer-reconcile -db /path/to/mailer.db
+mailer-reconcile -db /path/to/mailer.db -action confirm-accepted \
+  -queue-id QUEUE_ID -domain mail.example -message-id PROVIDER_MESSAGE_ID \
+  -operation-id INCIDENT_OPERATION_ID -actor OPERATOR_ID \
+  -evidence-ref PROVIDER_SUPPORT_OR_LOG_REFERENCE -confirm
+```
+
+Before confirming, verify provider acceptance for this exact queue ID and sending
+domain using provider logs/support evidence. An empty search result is not proof
+that a message was never accepted. The command does not query provider APIs or
+independently verify the operator's evidence. Keep payloads and recipient details
+out of the evidence reference; use an internal incident/log reference instead.
+The operation ID is an idempotency key: repeat identical arguments safely after
+an interrupted command; different evidence under the same ID is rejected.
+
+Acceptance and the immutable operator/evidence audit commit in one transaction.
+The timestamp records when reconciliation was observed locally. The command
+rejects active sends and a mismatched sending domain. It can attach acceptance
+evidence after cancellation/erasure without restoring content or reactivating
+delivery. Nothing in this command sends email or requeues an ambiguous job.
+Leave inconclusive cases quarantined; confirmed non-acceptance/retry handling
+still requires an explicit operator procedure rather than automated guessing.
+Tests cover audit-write rollback, immutable history, exact replay/conflicts,
+opening alongside an active send, pagination, confirmation and erasure.
