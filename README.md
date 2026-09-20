@@ -191,3 +191,35 @@ The build tag excludes it from ordinary builds. Insider's opt-in
 `TestConnectedMailerErasurePostgres` starts this process, drops one acknowledgment,
 restarts it, and verifies logical SQLite erasure and prevention of stale payload
 reintroduction. The test does not contact an email provider.
+
+### Provider acceptance and job status
+
+The send worker now commits Mailgun's returned message ID, actual provider domain
+and acceptance timestamp together with the queue's `sent` state. Exact repeats
+preserve the first timestamp; conflicting provider evidence is rejected. If
+cancellation or erasure won during an in-flight send, acceptance evidence is
+retained without restoring payloads or uncancelling the job. Acceptance is not
+inbox delivery. Older `sent` rows have no reconstructable provider ID.
+
+Authenticated `POST /job-status` accepts `{"job_keys":["your-job-key"]}` using the
+existing timestamp/request-signature protocol. Request 1–100 distinct keys; keys
+are at most 512 characters. A successful response has `success:true`, `code:200`
+and `jobs` containing `job_key`, `queue_state`, optional `provider_domain`,
+`provider_message_id`, `accepted_at` (Unix seconds) and `erased`. Unknown keys have
+`queue_state:"unknown"`. Legacy reused logical keys can return multiple messages;
+callers must not assume a unique result per key. No recipients or bodies are
+returned. The capabilities feature is `provider_acceptance_status`.
+
+Restart recovery retries claimed-but-not-sent (`inprog`) jobs. Jobs interrupted
+inside a provider send become `delivery_unknown` and are not automatically resent:
+the provider may already have accepted them. They appear in the protected
+`mailer_jobs{state="delivery_unknown"}` metric and the status API. Reconcile these
+with provider evidence before deciding whether to retry; verified acceptance can
+be committed through `RecordProviderAcceptance` without another send. An operator
+reconciliation UI/command and provider delivered/failed/complained result ingestion
+remain follow-up work. A local persistence failure after provider success stops
+the worker instead of deliberately rescheduling the accepted message.
+
+Tests cover rollback, restart, conflicting and duplicate acknowledgements,
+cancellation/erasure racing with acceptance, authenticated status requests and
+metrics without personal content. No live email provider was contacted.

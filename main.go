@@ -13,14 +13,14 @@ import (
 )
 
 type env struct {
-	SendGrid string
-	SendTimer int
-	DbName string
-	IsProd bool
-	Port string
-	MailGunKey string
+	SendGrid    string
+	SendTimer   int
+	DbName      string
+	IsProd      bool
+	Port        string
+	MailGunKey  string
 	MailDomains string
-	Secret string
+	Secret      string
 }
 
 func setupEnv() (*env, error) {
@@ -88,13 +88,16 @@ func mailWorker(e *env, ds *mail.Datastore, mailers map[string]*mail.Mailer) {
 			}
 			id, err := ms.SendMail(m)
 			if err != nil {
-				fmt.Printf("Mail job %s failed (x%d)! %s\n", m.IdemKey(), m.TryCount + 1, err.Error())
+				fmt.Printf("Mail job %s failed (x%d)! %s\n", m.IdemKey(), m.TryCount+1, err.Error())
 				addlTime := time.Duration(m.TryCount * 100)
 				retryAt := time.Now().Add(addlTime * time.Second)
-				ds.RescheduleFailed(m.IdemKey(), m.TryCount + 1, retryAt.UTC().Unix())
+				ds.RescheduleFailed(m.IdemKey(), m.TryCount+1, retryAt.UTC().Unix())
 			} else {
-				fmt.Println("sent id:", id)
-				ds.MarkSent(m.IdemKey())
+				if err := ds.RecordProviderAcceptance(m.IdemKey(), ms.MailGunDomain, id, time.Now()); err != nil {
+					// Do not reschedule a provider-accepted send on a local persistence error.
+					fmt.Println("Provider accepted mail, but acceptance persistence requires recovery")
+					os.Exit(1)
+				}
 			}
 		}
 

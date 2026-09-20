@@ -27,15 +27,15 @@ func HandleMetrics(w http.ResponseWriter, r *http.Request, ds *Datastore, token 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	var counts struct {
-		Pending, InFlight, Retrying, Exhausted, Accepted, Cancelled int64
-		Overdue                                                     int64
+		Pending, InFlight, Retrying, Exhausted, Accepted, Cancelled, Unknown int64
+		Overdue                                                              int64
 	}
 	err := ds.Data.QueryRowContext(ctx, `SELECT
  coalesce(sum(state='unsent'),0),coalesce(sum(state IN ('inprog','sending')),0),
  coalesce(sum(state='failed' AND try_count<20),0),coalesce(sum(state='failed' AND try_count>=20),0),
- coalesce(sum(state='sent'),0),coalesce(sum(state='cancelled'),0),
+ coalesce(sum(state='sent'),0),coalesce(sum(state='cancelled'),0),coalesce(sum(state='delivery_unknown'),0),
  coalesce(max(CASE WHEN state IN ('unsent','inprog','sending') OR (state='failed' AND try_count<20) THEN max(0,?-send_at) ELSE 0 END),0)
- FROM scheduled`, time.Now().Unix()).Scan(&counts.Pending, &counts.InFlight, &counts.Retrying, &counts.Exhausted, &counts.Accepted, &counts.Cancelled, &counts.Overdue)
+ FROM scheduled`, time.Now().Unix()).Scan(&counts.Pending, &counts.InFlight, &counts.Retrying, &counts.Exhausted, &counts.Accepted, &counts.Cancelled, &counts.Unknown, &counts.Overdue)
 	if err != nil {
 		http.Error(w, "metrics unavailable", http.StatusServiceUnavailable)
 		return
@@ -45,7 +45,7 @@ func HandleMetrics(w http.ResponseWriter, r *http.Request, ds *Datastore, token 
 	for _, item := range []struct {
 		name string
 		n    int64
-	}{{"pending", counts.Pending}, {"in_flight", counts.InFlight}, {"retrying", counts.Retrying}, {"exhausted", counts.Exhausted}, {"provider_accepted", counts.Accepted}, {"cancelled", counts.Cancelled}} {
+	}{{"pending", counts.Pending}, {"in_flight", counts.InFlight}, {"retrying", counts.Retrying}, {"exhausted", counts.Exhausted}, {"provider_accepted", counts.Accepted}, {"cancelled", counts.Cancelled}, {"delivery_unknown", counts.Unknown}} {
 		fmt.Fprintf(&out, "mailer_jobs{state=%q} %d\n", item.name, item.n)
 	}
 	fmt.Fprintf(&out, "# HELP mailer_oldest_attempt_overdue_seconds Age past the scheduled time of the oldest outstanding delivery attempt; retries reset the scheduled time\n# TYPE mailer_oldest_attempt_overdue_seconds gauge\nmailer_oldest_attempt_overdue_seconds %d\n", counts.Overdue)

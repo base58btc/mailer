@@ -41,6 +41,7 @@ var db_migration_exec = []string{
 	`CREATE TABLE mailgun_feedback_tokens(token_hash TEXT PRIMARY KEY,event_id TEXT NOT NULL,domain TEXT NOT NULL,created_at INTEGER NOT NULL);`,
 	`CREATE TABLE mail_recipient_suppressions(domain TEXT NOT NULL,recipient TEXT NOT NULL,reason TEXT NOT NULL CHECK(reason IN ('hard_bounce','complaint')),created_at INTEGER NOT NULL,PRIMARY KEY(domain,recipient));`,
 	`CREATE TABLE mail_job_erasures(job_key TEXT PRIMARY KEY,erased_at INTEGER NOT NULL);`,
+	`CREATE TABLE mail_provider_acceptances(idem_key TEXT PRIMARY KEY REFERENCES scheduled(idem_key),provider_domain TEXT NOT NULL,provider_message_id TEXT NOT NULL,accepted_at INTEGER NOT NULL,UNIQUE(provider_domain,provider_message_id));`,
 }
 
 func (ds *Datastore) CurrMigrations() int {
@@ -282,7 +283,9 @@ func (ds *Datastore) ScheduleMail(m *Mail) error {
 }
 
 func (ds *Datastore) ResetInProgress() {
-	stmt := `UPDATE scheduled SET state = 'failed' WHERE state IN ('inprog','sending');`
+	// A claimed job has not reached the provider. A sending job may have, so
+	// keep it for reconciliation instead of automatically duplicating delivery.
+	stmt := `UPDATE scheduled SET state = CASE WHEN state='sending' THEN 'delivery_unknown' ELSE 'failed' END WHERE state IN ('inprog','sending');`
 	ds.Data.MustExec(stmt)
 }
 

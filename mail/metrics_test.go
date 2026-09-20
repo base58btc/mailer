@@ -25,7 +25,7 @@ func TestMetricsAuthenticationAndQueueStates(t *testing.T) {
 	}
 	ds := getDatastore(t)
 	defer ds.Data.Close()
-	states := []string{"unsent", "inprog", "sending", "failed", "failed", "sent", "cancelled"}
+	states := []string{"unsent", "inprog", "sending", "failed", "failed", "sent", "cancelled", "delivery_unknown"}
 	for i, state := range states {
 		attempts := 1
 		if i == 4 {
@@ -47,7 +47,7 @@ func TestMetricsAuthenticationAndQueueStates(t *testing.T) {
 	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	for _, value := range []string{`mailer_jobs{state="pending"} 1`, `mailer_jobs{state="in_flight"} 2`, `mailer_jobs{state="retrying"} 1`, `mailer_jobs{state="exhausted"} 1`, `mailer_jobs{state="provider_accepted"} 1`, `mailer_jobs{state="cancelled"} 1`} {
+	for _, value := range []string{`mailer_jobs{state="pending"} 1`, `mailer_jobs{state="in_flight"} 2`, `mailer_jobs{state="retrying"} 1`, `mailer_jobs{state="exhausted"} 1`, `mailer_jobs{state="provider_accepted"} 1`, `mailer_jobs{state="cancelled"} 1`, `mailer_jobs{state="delivery_unknown"} 1`} {
 		if !strings.Contains(w.Body.String(), value) {
 			t.Fatal("missing", value, w.Body.String())
 		}

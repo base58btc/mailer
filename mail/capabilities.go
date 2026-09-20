@@ -20,5 +20,5 @@ func HandleCapabilities(w http.ResponseWriter, r *http.Request, secret string) {
 		Code          int      `json:"code"`
 		QueueContract int      `json:"queue_contract"`
 		Features      []string `json:"features"`
-	}{true, http.StatusOK, 1, []string{"idempotent_jobs", "unsubscribe_headers", "durable_suppression", "recipient_status", "job_erasure"}})
+	}{true, http.StatusOK, 1, []string{"idempotent_jobs", "unsubscribe_headers", "durable_suppression", "recipient_status", "job_erasure", "provider_acceptance_status"}})
 }
